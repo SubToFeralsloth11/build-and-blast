@@ -23,6 +23,7 @@ var rotor_count := 0
 var start_count := 0
 var alive_count := 0
 var activity := 0.0
+var grounded := 0
 var _dirty_split := false
 var _rids: Array[RID] = []
 var _engine: AudioStreamPlayer3D
@@ -36,8 +37,11 @@ func build(d: Dictionary) -> void:
 	collision_layer = Fx.L_VEHICLE
 	collision_mask = Fx.L_WORLD | Fx.L_VEHICLE | Fx.L_PROPS | Fx.L_TARGET
 	continuous_cd = true
-	angular_damp = 0.8
-	linear_damp = 0.01
+	# the project default damping (0.1) would act like a hidden brake
+	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	linear_damp = 0.0
+	angular_damp = 0.6
 	var pm := PhysicsMaterial.new()
 	pm.friction = 0.7
 	pm.bounce = 0.05
@@ -78,6 +82,10 @@ func build(d: Dictionary) -> void:
 				p[nm] = n
 		if vis.get_node_or_null("yaw/pitch"):
 			p["pitch"] = vis.get_node("yaw/pitch")
+		if def.has("radius"):
+			p["dust"] = _emitter(pos + Vector3(0, -def.radius, 0.3), Color("#d8b98c"))
+		elif b.id == "boatprop":
+			p["dust"] = _emitter(pos + Vector3(0, 0, 0.8), Color(0.9, 0.97, 1.0))
 		if b.id == "seat" and seat_idx < 0:
 			seat_idx = parts.size()
 		by_cell[cell] = parts.size()
@@ -89,6 +97,13 @@ func build(d: Dictionary) -> void:
 	_laser_snd = Sfx.loop_player("laser", self)
 	_flame_snd = Sfx.loop_player("flame", self)
 	_jet_snd = Sfx.loop_player("jet", self)
+
+
+func _emitter(pos: Vector3, col: Color) -> GPUParticles3D:
+	var e := Blocks._particles(self, "fx", pos, Vector3(0, 1, 0.6), col, false)
+	e.amount = 24
+	e.lifetime = 1.4
+	return e
 
 
 func _recompute() -> void:
@@ -165,7 +180,7 @@ func _physics_process(delta: float) -> void:
 	var jet_act := 0.0
 	var laser_on := false
 	var flame_on := false
-	var fwd_speed := lv.dot(gb * FWD)
+	grounded = 0
 	for i in parts.size():
 		var p: Dictionary = parts[i]
 		if not p.alive:
@@ -176,8 +191,11 @@ func _physics_process(delta: float) -> void:
 		var depth := Fx.WATER - (wp.y - 0.5)
 		if depth > 0.0:
 			var sub := minf(depth, 1.0)
+			# hull contact: even a shallow draft gets full planing drag
+			var wet := minf(depth * 4.0, 1.0)
 			var v := _pv(wp, com_w)
-			var drag := -Vector3(v.x, v.y * 3.0, v.z) * (v.length() * 3.0 + 25.0) * sub
+			var vh := Vector3(v.x, 0.0, v.z)
+			var drag := -vh * (vh.length() * 1.2 + 10.0) * wet - Vector3(0.0, v.y, 0.0) * (v.length() * 4.0 + 90.0) * wet
 			apply_force(Vector3.UP * sub * 9800.0 * p.def.buoy + drag, off)
 		var cfg: Dictionary = p.cfg
 		var pw: float = cfg.get("pow", 100) / 100.0
@@ -199,11 +217,18 @@ func _physics_process(delta: float) -> void:
 				if p.id == "prop":
 					t *= 1.0 - clampf(lv.dot(dir) / 95.0, 0.0, 0.85)
 				if absf(t) > 0.0:
-					apply_force(dir * t, off)
+					if p.id == "boatprop":
+						# push at the hull's height so boats don't backflip
+						var rel := wp - com_w
+						apply_force(dir * t, com_w + rel - gb.y * rel.dot(gb.y) * 0.85 - gpos)
+					else:
+						apply_force(dir * t, off)
 				act += absf(amt) * (2.0 if p.id == "rocket" else 1.0)
 				if p.id == "jet" or p.id == "rocket":
 					jet_act += absf(amt)
 				p.st.fl = lerpf(p.st.fl, absf(amt), 0.25)
+				if p.has("dust"):
+					p.dust.emitting = absf(amt) > 0.1
 				if p.has("flame"):
 					var fl: Node3D = p.flame
 					fl.visible = p.st.fl > 0.03
@@ -211,7 +236,7 @@ func _physics_process(delta: float) -> void:
 				if p.has("spin"):
 					p.spin.rotate_object_local(Vector3.BACK, (6.0 + p.st.fl * 40.0) * delta * signf(amt + 0.001))
 			"rotor":
-				_rotor(p, wp, off, gb, lv, input, pw, delta)
+				_rotor(p, wp, off, gb, lv, input, pw, delta, thr)
 				act += 0.7
 			"balloon":
 				if wp.y < 700.0 and input > 0.5:
@@ -282,7 +307,7 @@ func _physics_process(delta: float) -> void:
 					_fire(p, gb, pw)
 	# air drag
 	if speed > 0.1:
-		apply_central_force(-lv * speed * 0.0035 * alive_count)
+		apply_central_force(-lv * speed * 0.0045 * alive_count)
 	activity = lerpf(activity, clampf(act / 3.0 + absf(thr) * 0.6, 0.0, 1.0), 0.1)
 	_engine.volume_db = lerpf(-28.0, -6.0, activity) if activity > 0.02 else -60.0
 	_engine.pitch_scale = clampf(0.6 + activity * 0.5 + speed / 60.0, 0.5, 2.6)
@@ -335,7 +360,7 @@ func _wheel(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physic
 			var dp: float = p.def.drive * cfg.get("pow", 100) / 100.0
 			var lim := WHEEL_VMAX if thr > 0.0 else WHEEL_VREV
 			lon = dp * thr * clampf(1.0 - absf(vf) / lim, 0.0, 1.0)
-		lon -= vf * share * 0.12
+		lon -= vf * share * 0.015
 		if absf(thr) < 0.05 and absf(vf) < 2.0:
 			lon -= vf * share / delta * 0.25
 		var f := sg * lat + fg * lon
@@ -343,14 +368,19 @@ func _wheel(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physic
 		if f.length() > grip:
 			f = f.normalized() * grip
 		apply_force(f, h.position + up * rad * 0.6 - global_position)
+		grounded += 1
+		p.dust.emitting = absf(vf) > 7.0 and h.collider is StaticBody3D and h.position.y > 1.0
+	else:
+		p.dust.emitting = false
 	p.st.spin += vf / rad * delta
 	var node: Node3D = p.node
 	node.transform = Transform3D(Basis(Vector3.UP, ang), p.pos + Vector3(0, -(dist - rad), 0))
 	p.spin.rotation.x = -p.st.spin
 
 
-func _rotor(p: Dictionary, wp: Vector3, off: Vector3, gb: Basis, lv: Vector3, input: float, pw: float, delta: float) -> void:
-	var up_r: Vector3 = gb * (p.basis * Vector3.UP)
+func _rotor(p: Dictionary, wp: Vector3, off: Vector3, gb: Basis, lv: Vector3, input: float, pw: float, delta: float, thr: float) -> void:
+	# W/S tilts the rotor disc so helicopters fly forward without nosing over
+	var up_r: Vector3 = (gb * (p.basis * Vector3.UP) + gb * FWD * thr * 0.4).normalized()
 	var share := mass / maxf(1.0, rotor_count)
 	var target_vs := input * 9.0
 	var want := share * 9.8 / maxf(up_r.y, 0.35) + (target_vs - lv.y) * share * 2.2
@@ -384,7 +414,7 @@ func _aero(p: Dictionary, wp: Vector3, off: Vector3, gb: Basis, com_w: Vector3, 
 	if p.id == "wing" and vc > 0.0:
 		f += n * 0.26 * vc * vc
 	if p.id == "flap":
-		f += n * deflect * 0.5 * vc * absf(vc) * pw
+		f += n * deflect * 1.4 * vc * absf(vc) * pw
 	f *= dens
 	if f.length() > 30000.0:
 		f = f.normalized() * 30000.0
@@ -463,7 +493,7 @@ func _fire(p: Dictionary, gb: Basis, pw: float) -> void:
 			proj.global_basis = gb * p.basis
 			var bn: Node3D = p.bomb
 			bn.visible = false
-			get_tree().create_timer(1.1).timeout.connect(func(): if is_instance_valid(bn): bn.visible = true)
+			get_tree().create_timer(1.1).timeout.connect(bn.show)
 			Sfx.play("pop", bp, -2.0, 0.5)
 
 
@@ -560,6 +590,9 @@ func destroy_part(i: int) -> void:
 	Sfx.play("pop" if p.id == "balloon" else "hit", wp, 0.0, 0.6)
 	p.node.queue_free()
 	p.shape.queue_free()
+	if p.has("dust"):
+		p.dust.queue_free()
+		p.erase("dust")
 	if p.id == "tnt":
 		Fx.explode.call_deferred(wp, 8.0, 160.0)
 	if i == seat_idx:
@@ -626,8 +659,9 @@ func _make_debris(chunk: Array, extra_vel: Vector3) -> void:
 		for nm in ["flame", "beam", "canopy", "lamp", "field"]:
 			if p.has(nm):
 				p[nm].visible = false
-		if p.has("particles"):
-			p.particles.emitting = false
+		for nm in ["particles", "dust"]:
+			if p.has(nm):
+				p[nm].emitting = false
 		node.reparent(body)
 		p.shape.reparent(body)
 	body.mass = maxf(m, 1.0)

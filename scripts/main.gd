@@ -103,9 +103,9 @@ func _setup_env() -> void:
 	env.sky = sky
 	env.background_mode = Environment.BG_SKY
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 0.9
 	env.glow_enabled = true
 	env.glow_intensity = 0.6
 	env.glow_bloom = 0.05
@@ -118,7 +118,7 @@ func _setup_env() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.rotation = Vector3(deg_to_rad(-48), deg_to_rad(-35), 0)
-	sun.light_energy = 1.25
+	sun.light_energy = 1.05
 	sun.light_color = Color("#fff4e0")
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 260.0

@@ -206,21 +206,17 @@ func burst(pos: Vector3, col: Color, amount: int, speed: float, size: float, lif
 			var bm := BoxMesh.new()
 			bm.size = Vector3.ONE * size
 			mesh = bm
+			var m := StandardMaterial3D.new()
+			m.vertex_color_use_as_albedo = true
+			m.albedo_color = col
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mesh.material = m
 		else:
-			var sm := SphereMesh.new()
-			sm.radius = size
-			sm.height = size * 2.0
-			sm.radial_segments = 8
-			sm.rings = 4
-			mesh = sm
-		var m := StandardMaterial3D.new()
-		m.vertex_color_use_as_albedo = true
-		m.albedo_color = col
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		if additive:
-			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		mesh.material = m
+			var q := Blocks.puff_mesh(size * 1.4, additive).duplicate() as QuadMesh
+			var m := (q.material as StandardMaterial3D).duplicate() as StandardMaterial3D
+			m.albedo_color = col
+			q.material = m
+			mesh = q
 		_draw_cache[dkey] = mesh
 	p.draw_pass_1 = _draw_cache[dkey]
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

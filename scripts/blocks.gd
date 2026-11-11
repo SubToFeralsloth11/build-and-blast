@@ -202,6 +202,39 @@ func ghost_mat(ok: bool) -> Material:
 	return _mats[key]
 
 
+## Soft round billboard used by smoke, fire and explosion particles.
+func puff_mesh(size: float, additive: bool) -> Mesh:
+	var key := "puff%.2f_%s" % [size, additive]
+	if not _meshes.has(key):
+		if not _mats.has("puff_tex"):
+			var gt := GradientTexture2D.new()
+			gt.fill = GradientTexture2D.FILL_RADIAL
+			gt.fill_from = Vector2(0.5, 0.5)
+			gt.fill_to = Vector2(1.0, 0.5)
+			gt.width = 64
+			gt.height = 64
+			var g := Gradient.new()
+			g.set_color(0, Color(1, 1, 1, 1))
+			g.set_color(1, Color(1, 1, 1, 0))
+			g.add_point(0.45, Color(1, 1, 1, 0.75))
+			gt.gradient = g
+			_mats["puff_tex"] = gt
+		var m := StandardMaterial3D.new()
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.albedo_texture = _mats["puff_tex"]
+		m.vertex_color_use_as_albedo = true
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		if additive:
+			m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		var q := QuadMesh.new()
+		q.size = Vector2.ONE * size * 2.0
+		q.material = m
+		_meshes[key] = q
+	return _meshes[key]
+
+
 func box_mesh(size: Vector3) -> Mesh:
 	var key := "box%s" % size
 	if not _meshes.has(key):
@@ -356,19 +389,7 @@ func _particles(parent: Node3D, nm: String, pos: Vector3, dir: Vector3, col: Col
 	ramp.gradient = g
 	pm.color_ramp = ramp
 	p.process_material = pm
-	var sm := SphereMesh.new()
-	sm.radius = 0.25 if not fire else 0.3
-	sm.height = sm.radius * 2.0
-	sm.radial_segments = 8
-	sm.rings = 4
-	var smat := StandardMaterial3D.new()
-	smat.vertex_color_use_as_albedo = true
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if fire else BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	if fire:
-		smat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	sm.material = smat
-	p.draw_pass_1 = sm
+	p.draw_pass_1 = puff_mesh(0.35 if not fire else 0.4, fire)
 	parent.add_child(p)
 	return p
 
@@ -465,8 +486,14 @@ func make_visual(id: String, col: Color) -> Node3D:
 			for i in 2:
 				var b := _node(rs, "b%d" % i)
 				b.rotation.y = i * PI
-				_mi(b, box_mesh(Vector3(1.7, 0.04, 0.24)), Vector3(0.9, 0, 0), mat(Color("#30353d"), 0.3, 0.5), Vector3(0.08, 0, 0))
-				_mi(b, box_mesh(Vector3(0.2, 0.045, 0.245)), Vector3(1.65, 0, 0), mat(Color("#ffcc00"), 0.2, 0.5), Vector3(0.08, 0, 0))
+				_mi(b, box_mesh(Vector3(1.7, 0.05, 0.34)), Vector3(0.9, 0, 0), mat(Color("#30353d"), 0.3, 0.5), Vector3(0.08, 0, 0))
+				_mi(b, box_mesh(Vector3(0.22, 0.055, 0.345)), Vector3(1.65, 0, 0), mat(Color("#ffcc00"), 0.2, 0.5), Vector3(0.08, 0, 0))
+			var blur := StandardMaterial3D.new()
+			blur.albedo_color = Color(0.15, 0.17, 0.2, 0.22)
+			blur.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			blur.cull_mode = BaseMaterial3D.CULL_DISABLED
+			blur.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_mi(r, cyl_mesh(1.75, 1.75, 0.02, 32), Vector3(0, 0.48, 0), blur).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		"balloon":
 			_mi(r, box_mesh(Vector3(0.7, 0.2, 0.7)), Vector3(0, -0.4, 0), mat(Color("#8a5a2b"), 0.0, 0.9))
 			for x in [-0.28, 0.28]:

@@ -45,7 +45,7 @@ var _ring: Label
 
 
 func setup() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = UI.make_theme()
 	# speed panel
@@ -78,7 +78,7 @@ func setup() -> void:
 	v.add_child(_toggles)
 	# score panel
 	var scp := UI.panel()
-	scp.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	scp.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	scp.offset_left = -270
 	scp.offset_right = -16
 	scp.offset_top = 16
@@ -94,7 +94,7 @@ func setup() -> void:
 	sv.add_child(_ring)
 	# event feed
 	_feed = VBoxContainer.new()
-	_feed.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_feed.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_feed.offset_left = -300
 	_feed.offset_right = 300
 	_feed.offset_top = 24
@@ -102,7 +102,7 @@ func setup() -> void:
 	add_child(_feed)
 	# crosshair
 	_cross = Crosshair.new()
-	_cross.set_anchors_preset(Control.PRESET_CENTER)
+	_cross.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_cross.custom_minimum_size = Vector2(60, 60)
 	_cross.offset_left = -30
 	_cross.offset_top = -30
@@ -117,7 +117,7 @@ func setup() -> void:
 
 func _build_help() -> void:
 	_help = UI.panel()
-	_help.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 16
 	_help.offset_bottom = -16
 	_help.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -133,7 +133,7 @@ Tab  back to garage      Esc  menu      F1  hide this""", 13, UI.TEXT)
 
 func _build_wreck() -> void:
 	_wreck = UI.panel(Color(0.25, 0.04, 0.06, 0.92))
-	_wreck.set_anchors_preset(Control.PRESET_CENTER)
+	_wreck.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_wreck.offset_left = -230
 	_wreck.offset_right = 230
 	_wreck.offset_top = 70
@@ -153,7 +153,7 @@ func _build_wreck() -> void:
 
 func _build_pause() -> void:
 	_pause = UI.panel(Color(0.06, 0.07, 0.1, 0.96))
-	_pause.set_anchors_preset(Control.PRESET_CENTER)
+	_pause.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_pause.offset_left = -200
 	_pause.offset_right = 200
 	_pause.offset_top = -230

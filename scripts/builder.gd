@@ -56,9 +56,9 @@ func _ready() -> void:
 	_sel_box = _wire_box(Color("#ffd23f"), 1.08)
 	_sel_box.visible = false
 	var pm := QuadMesh.new()
-	pm.size = Vector2(40, 30)
+	pm.size = Vector2(14, 8)
 	var mm := StandardMaterial3D.new()
-	mm.albedo_color = Color(0.3, 0.8, 1.0, 0.07)
+	mm.albedo_color = Color(0.3, 0.8, 1.0, 0.035)
 	mm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mm.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -68,8 +68,8 @@ func _ready() -> void:
 	_mirror_plane.rotation.y = PI * 0.5
 	_mirror_plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mirror_plane)
-	_com_marker = _marker(Color("#ffd23f"), "COM")
-	_col_marker = _marker(Color("#3fd6ff"), "LIFT")
+	_com_marker = _marker(Color("#ffd23f"), "MASS", 0.5)
+	_col_marker = _marker(Color("#3fd6ff"), "LIFT", -0.45)
 	_loose_root = Node3D.new()
 	add_child(_loose_root)
 	load_design(Designs.empty_design(), false)
@@ -141,7 +141,7 @@ func _wire_box(col: Color, s: float) -> Node3D:
 	return n
 
 
-func _marker(col: Color, text: String) -> Node3D:
+func _marker(col: Color, text: String, label_y: float) -> Node3D:
 	var n := Node3D.new()
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
@@ -156,7 +156,7 @@ func _marker(col: Color, text: String) -> Node3D:
 	l.modulate = col
 	l.no_depth_test = true
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.position = Vector3(0, 0.5, 0)
+	l.position = Vector3(0, label_y, 0)
 	l.pixel_size = 0.006
 	n.add_child(l)
 	add_child(n)
@@ -443,6 +443,7 @@ func _refresh() -> void:
 		lo = minf(lo, c.y)
 	_floor.position.y = lo - 0.5 - 0.95
 	_mirror_plane.position = Vector3(0, _center().y, _center().z)
+	_mirror_plane.scale = Vector3.ONE * maxf(1.0, _radius() / 4.0)
 	changed.emit()
 
 

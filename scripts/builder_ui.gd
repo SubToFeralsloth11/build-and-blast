@@ -28,7 +28,7 @@ var _presets: Array = []
 
 func setup(b: Node) -> void:
 	builder = b
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = UI.make_theme()
 	_presets = Designs.presets()
@@ -47,7 +47,7 @@ func setup(b: Node) -> void:
 
 func _build_top() -> void:
 	var bar := UI.panel()
-	bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	bar.offset_left = 10
 	bar.offset_right = -10
 	bar.offset_top = 10
@@ -153,7 +153,7 @@ func _on_random() -> void:
 
 func _build_left() -> void:
 	var p := UI.panel()
-	p.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	p.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	p.offset_left = 10
 	p.offset_top = 74
 	p.offset_bottom = -74
@@ -204,7 +204,7 @@ func _select_cat(c: String) -> void:
 		b.tooltip_text = "%s\n%s\nMass %d kg   Armor %d" % [def.name, def.desc, def.mass, def.hp]
 		b.pressed.connect(_pick_block.bind(id))
 		var v := VBoxContainer.new()
-		v.set_anchors_preset(Control.PRESET_FULL_RECT)
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		b.add_child(v)
@@ -235,7 +235,7 @@ func _pick_block(id: String) -> void:
 
 func _build_right_panel() -> void:
 	var p := UI.panel()
-	p.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	p.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
 	p.offset_right = -10
 	p.offset_top = 74
 	p.offset_bottom = -74
@@ -406,7 +406,7 @@ func _right_config() -> void:
 
 func _build_bottom() -> void:
 	var p := UI.panel()
-	p.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	p.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	p.offset_left = 10
 	p.offset_right = -10
 	p.offset_bottom = -10
@@ -423,7 +423,7 @@ func _build_bottom() -> void:
 	_hint = UI.label("", 14, UI.MUTED)
 	h.add_child(_hint)
 	_toast = UI.label("", 22, Color.WHITE)
-	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_toast.offset_top = 86
 	_toast.offset_left = -400
 	_toast.offset_right = 400

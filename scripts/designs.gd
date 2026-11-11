@@ -95,15 +95,19 @@ func _car(o: Dictionary) -> Dictionary:
 		b.add("wedge", x, y, z0 - 1, 0, acc if mat == "armor" else col)
 	# wheels
 	var wz := [z0, z1]
-	if o.get("six", false):
+	if o.get("six", false) or mat == "armor":
 		wz = [z0, (z0 + z1) / 2, z1]
 	var wid := "bigwheel" if big else "wheel"
+	# heavy armor gets beefier wheel motors
+	var wcfg: Dictionary = Blocks.defs[wid].cfg.duplicate()
+	if mat == "armor":
+		wcfg["pow"] = 175
 	for z in wz:
 		if big:
 			b.sym("cube", hw + 1, y, z, 0, acc)
-			b.sym(wid, hw + 1, y - 1, z)
+			b.sym(wid, hw + 1, y - 1, z, 0, "", wcfg)
 		else:
-			b.sym(wid, hw + 1, y, z)
+			b.sym(wid, hw + 1, y, z, 0, "", wcfg)
 	# rear deck / roll bar
 	b.sym("cube", hw, y + 1, 1, 0, acc)
 	if hw > 0:
@@ -215,6 +219,12 @@ func _plane_at(o: Dictionary, wz: int) -> Dictionary:
 			break
 		var s: Vector3i = slots.pop_front()
 		b.add(w, s.x, s.y, s.z)
+	# make sure it can actually get off the ground
+	var spots := [2, 4, 1, 3]
+	while _thrust(b.blocks) < _mass(b.blocks) * 9.8 * 0.55 and not spots.is_empty():
+		var x: int = spots.pop_front()
+		if x <= span - 1:
+			b.sym("thruster", x, -1, wz, 0, acc)
 	for i in o.get("bombs", 0):
 		b.add("bombs", 0, -1, i + 2)
 	for g in o.get("gadgets", []):
@@ -267,6 +277,14 @@ func _mass(blocks: Array) -> float:
 	for b in blocks:
 		m += Blocks.defs[b.id].mass
 	return m
+
+
+func _thrust(blocks: Array) -> float:
+	var t := 0.0
+	for b in blocks:
+		if b.id in ["thruster", "jet", "prop"]:
+			t += Blocks.defs[b.id].thrust
+	return t
 
 
 func _rotors(blocks: Array) -> int:

@@ -74,7 +74,7 @@ func _raw(x: float, z: float) -> float:
 	# mountains on the land edges
 	var edge := maxf(absf(x), absf(z))
 	if edge > 600.0:
-		h += pow(edge - 600.0, 1.4) * 0.35
+		h += pow(edge - 600.0, 1.25) * 0.22
 	h = maxf(h, 2.5)
 	# coast
 	var coast := smoothstep(150.0, 330.0, x + _noise.get_noise_2d(z * 0.6, 500.0) * 70.0)
@@ -177,6 +177,7 @@ func _build_terrain() -> void:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true
+	m.vertex_color_is_srgb = true
 	m.roughness = 0.95
 	mesh.surface_set_material(0, m)
 	var mi := MeshInstance3D.new()
@@ -205,9 +206,9 @@ func _build_terrain() -> void:
 
 func _build_water() -> void:
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(6000, 6000)
-	pm.subdivide_width = 160
-	pm.subdivide_depth = 160
+	pm.size = Vector2(16000, 16000)
+	pm.subdivide_width = 260
+	pm.subdivide_depth = 260
 	var sh := Shader.new()
 	sh.code = """
 shader_type spatial;
@@ -229,7 +230,10 @@ void fragment() {
 	float h0 = wave(wp.xz, TIME);
 	float hx = wave(wp.xz + vec2(e, 0.0), TIME);
 	float hz = wave(wp.xz + vec2(0.0, e), TIME);
-	vec2 rip = vec2(sin(wp.x * 0.9 + TIME * 2.3) + sin(wp.z * 1.3 - TIME * 1.9), cos(wp.z * 0.8 + TIME * 2.1) + sin(wp.x * 1.1 + TIME * 1.6)) * 0.035;
+	vec2 q = wp.xz;
+	vec2 rip = vec2(
+		sin(q.x * 0.71 + q.y * 0.23 + TIME * 2.3) + sin(q.x * 1.37 - q.y * 0.91 - TIME * 1.7) * 0.6 + sin(q.y * 2.9 + q.x * 0.4 + TIME * 3.1) * 0.3,
+		cos(q.y * 0.83 - q.x * 0.31 + TIME * 2.1) + sin(q.y * 1.53 + q.x * 1.1 + TIME * 1.5) * 0.6 + cos(q.x * 3.3 - q.y * 0.5 - TIME * 2.7) * 0.3) * 0.012;
 	vec3 n = normalize(vec3(h0 - hx + rip.x, e, h0 - hz + rip.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	float depth = texture(depth_tex, SCREEN_UV).r;
@@ -345,11 +349,11 @@ func _build_runway() -> void:
 
 func _build_pad() -> void:
 	var c := Vector3(PAD.x, PAD_H, PAD.y)
-	var b := _static_box(c - Vector3(0, 0.45, 0), Vector3(36, 1.0, 36), Color("#9aa4ae"), Vector3.ZERO, false)
+	var b := _static_box(c - Vector3(0, 0.45, 0), Vector3(36, 1.0, 36), Color("#b9ad98"), Vector3.ZERO, false)
 	for i in 6:
-		Blocks._mi(b, Blocks.box_mesh(Vector3(36, 0.04, 0.5)), Vector3(0, 0.51, -15 + i * 6), Blocks.mat(Color("#7f8a95"), 0, 0.8))
+		Blocks._mi(b, Blocks.box_mesh(Vector3(36, 0.04, 0.5)), Vector3(0, 0.51, -15 + i * 6), Blocks.mat(Color("#968a76"), 0, 0.8))
 	Blocks._mi(b, Blocks.cyl_mesh(6, 6, 0.06, 32), Vector3(0, 0.52, 0), Blocks.mat(Color("#f5c518"), 0, 0.7))
-	Blocks._mi(b, Blocks.cyl_mesh(5.2, 5.2, 0.08, 32), Vector3(0, 0.52, 0), Blocks.mat(Color("#9aa4ae"), 0, 0.8))
+	Blocks._mi(b, Blocks.cyl_mesh(5.2, 5.2, 0.08, 32), Vector3(0, 0.52, 0), Blocks.mat(Color("#b9ad98"), 0, 0.8))
 	# flag poles
 	for x in [-17.0, 17.0]:
 		_static_box(c + Vector3(x, 5, -17), Vector3(0.3, 10, 0.3), Color("#d9dee5"))
@@ -607,6 +611,8 @@ func _build_dock() -> void:
 			var px := x0 + i * 12.0
 			var gy := _ground(px, z + s)
 			var hgt := 1.6 - gy + 0.5
+			if hgt < 0.4:
+				continue
 			_static_box(Vector3(px, gy + hgt * 0.5 - 0.5, z + s), Vector3(0.6, hgt, 0.6), Color("#5d3b1a"), Vector3.ZERO, false)
 	# launch ramp off the end of the pier
 	_ramp(Vector3(x1 - 4.0, 1.85, z), 8, 3.0, 10, -PI * 0.5, Color("#ffcc00"))

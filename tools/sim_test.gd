@@ -5,6 +5,8 @@ extends Node
 ## physics results, or windowed with `-- --shots` to save screenshots.
 
 var main: Node
+var verbose := false
+var only := ""
 
 
 func run(m: Node, args: PackedStringArray) -> void:
@@ -20,6 +22,9 @@ func run(m: Node, args: PackedStringArray) -> void:
 func _frames(n: int) -> void:
 	for i in n:
 		await get_tree().physics_frame
+		if verbose and main.vehicle and is_instance_valid(main.vehicle) and Engine.get_physics_frames() % 30 == 0:
+			var v: RigidBody3D = main.vehicle
+			print("  t=%d spd=%.1f vel=%s y=%.2f up=%.2f fwd=%s grounded=%d" % [Engine.get_physics_frames(), v.linear_velocity.length(), v.linear_velocity.snapped(Vector3.ONE * 0.1), v.com_world().y, v.global_basis.y.y, (-v.global_basis.z).snapped(Vector3.ONE * 0.01), v.grounded])
 
 
 func _kind(d: Dictionary) -> String:
@@ -44,22 +49,113 @@ func _up(v: Node) -> float:
 func _simtest(args: PackedStringArray) -> void:
 	var list: Array = Designs.presets()
 	var n_random := 14
+	verbose = "--verbose" in args
 	for a in args:
 		if a.begins_with("--random="):
 			n_random = int(a.substr(9))
+		if a.begins_with("--only="):
+			only = a.substr(7)
 	for i in n_random:
 		var r: Dictionary = Designs.random_design()
 		r.name = "RANDOM %d %s" % [i, r.name]
 		list.append(r)
 	var fails := 0
 	for d in list:
+		if only != "" and not d.name.contains(only):
+			continue
 		var res: Dictionary = await _sim(d)
 		var ok: bool = res.ok
 		if not ok:
 			fails += 1
 		print("%s %-34s %-6s %s" % ["PASS" if ok else "FAIL", d.name, res.kind, res.msg])
+		if not ok:
+			var st: Dictionary = Designs.stats(d)
+			var ids := {}
+			for b in d.blocks:
+				ids[b.id] = ids.get(b.id, 0) + 1
+			print("     mass=%d wheels=%d %s" % [st.mass, st.wheels, ids])
 	await _tnt_test()
+	fails += _builder_test()
 	print("SIMTEST DONE fails=%d" % fails)
+
+
+func _check(cond: bool, what: String) -> int:
+	print("%s builder: %s" % ["PASS" if cond else "FAIL", what])
+	return 0 if cond else 1
+
+
+func _builder_test() -> int:
+	var f := 0
+	var b: Node = main.builder
+	b.load_design(Designs.empty_design())
+	b.mirror = true
+	b.set_block("cube")
+	b.place(Vector3i(0, 0, -1))
+	f += _check(b.cells.size() == 2, "center block placed once with mirror on")
+	b.place(Vector3i(1, 0, 0))
+	f += _check(b.cells.size() == 4 and b.cells.has(Vector3i(-1, 0, 0)), "mirror places the twin")
+	b.rot = Blocks.rot_toward(Vector3.RIGHT, Vector3.UP)
+	b.set_block("thruster")
+	b.rotate_block(Vector3.UP)
+	b.place(Vector3i(2, 0, 0))
+	var r1: int = b.cells[Vector3i(2, 0, 0)].r
+	var r2: int = b.cells[Vector3i(-2, 0, 0)].r
+	var d1: Vector3 = Blocks.rots[r1] * Vector3.FORWARD
+	var d2: Vector3 = Blocks.rots[r2] * Vector3.FORWARD
+	f += _check(d1.is_equal_approx(Vector3(-d2.x, d2.y, d2.z)), "mirrored thruster points the mirrored way")
+	b.undo()
+	f += _check(b.cells.size() == 4, "undo removes the last placement")
+	b.redo()
+	f += _check(b.cells.size() == 6, "redo restores it")
+	b.remove(Vector3i(0, 0, 0))
+	f += _check(b.cells.has(Vector3i.ZERO), "seat can't be deleted")
+	b.remove(Vector3i(1, 0, 0))
+	var st: Dictionary = Designs.stats(b.to_design())
+	f += _check(st.loose == 2, "removing a bridge leaves loose blocks flagged (%d)" % st.loose)
+	b.paint_color = Color("#e53935")
+	b.paint(Vector3i(0, 0, -1))
+	f += _check(b.cells[Vector3i(0, 0, -1)].c == "e53935", "paint sets color")
+	b.paint_color = null
+	b.set_block("mg")
+	b.place(Vector3i(0, 1, -1))
+	b.set_cfg(Vector3i(0, 1, -1), "ch", "act1")
+	var d: Dictionary = b.to_design()
+	d.name = "zz selftest"
+	Designs.save_design(d)
+	var back := Designs.load_design("zz selftest")
+	f += _check(back.get("blocks", []).size() == d.blocks.size(), "save/load roundtrip keeps blocks")
+	var cfg_ok := false
+	for blk in back.get("blocks", []):
+		if blk.id == "mg" and blk.cfg.get("ch", "") == "act1":
+			cfg_ok = true
+	f += _check(cfg_ok, "save/load keeps key bindings")
+	Designs.delete_design("zz selftest")
+	# drive every UI panel once so script errors surface in the log
+	var ui: Node = main.bui
+	for c in Blocks.CATS:
+		ui._select_cat(c)
+	b.set_tool("paint")
+	b.set_tool("config")
+	for cell in [Vector3i(0, 1, -1), Vector3i(2, 0, 0), Vector3i(0, 0, 0)]:
+		if b.cells.has(cell):
+			b._select(cell)
+	b.load_design(Designs.presets()[0])
+	for cell in b.cells:
+		if b.cells[cell].id == "wheel":
+			b._select(cell)
+			break
+	b.set_tool("build")
+	ui._on_random()
+	ui._fill_load_menu()
+	main._set_paused(true)
+	main._set_paused(false)
+	var loose := 0
+	for i in 200:
+		loose += Designs.stats(Designs.random_design()).loose
+	for p in Designs.presets():
+		loose += Designs.stats(p).loose
+	f += _check(loose == 0, "every preset and 200 random builds are fully connected")
+	return f
 
 
 func _sim(d: Dictionary) -> Dictionary:
@@ -85,22 +181,31 @@ func _sim(d: Dictionary) -> Dictionary:
 			msg = "speed5s=%.1f dist=%.0f turn=%.2f up=%.2f" % [spd, dist, yawrate, _up(v)]
 			ok = spd > 12.0 and dist > 30.0
 		"plane":
-			Controls.sim = {"throttle": 1.0}
+			# a simple autopilot plays the role of the pilot: hold the runway
+			# heading, rotate at speed, then hold a 12 degree climb wings-level
 			var ground_y: float = p0.y
 			var max_gain := 0.0
 			var vmax := 0.0
 			for i in 60 * 30:
-				if i == 60 * 14:
-					Controls.sim = {"throttle": 1.0, "pitch": 0.7}
-				if i == 60 * 17:
-					Controls.sim = {"throttle": 1.0, "pitch": 0.15}
-				await get_tree().physics_frame
+				var f: Vector3 = -v.global_basis.z
+				var right: Vector3 = v.global_basis.x
+				var yaw_err := atan2(-f.x, -f.z)
+				var pitch_ang := asin(clampf(f.y, -1.0, 1.0))
+				var spd := v.linear_velocity.length()
+				var target := deg_to_rad(12.0) if spd > 30.0 else 0.0
+				Controls.sim = {
+					"throttle": 1.0,
+					"steer": clampf(yaw_err * 2.0, -1.0, 1.0),
+					"pitch": clampf((target - pitch_ang) * 3.0, -1.0, 1.0),
+					"roll": clampf(right.y * 3.0, -1.0, 1.0),
+				}
+				await _frames(1)
 				if not v.alive:
 					break
 				max_gain = maxf(max_gain, v.com_world().y - ground_y)
 				vmax = maxf(vmax, v.linear_velocity.length())
 			msg = "vmax=%.1f climb=%.0f up=%.2f alive=%s" % [vmax, max_gain, _up(v), v.alive]
-			ok = max_gain > 25.0 and v.alive
+			ok = max_gain > 40.0 and v.alive
 		"heli":
 			Controls.sim = {"lift": 1.0}
 			await _frames(240)
@@ -162,6 +267,7 @@ func _shot(nm: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://tools/out"))
+	FileAccess.open(ProjectSettings.globalize_path("res://tools/out/.gdignore"), FileAccess.WRITE).store_string("")
 	var path := ProjectSettings.globalize_path("res://tools/out/%s.png" % nm)
 	img.save_png(path)
 	print("SHOT ", path)
