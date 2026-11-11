@@ -75,6 +75,7 @@ func _simtest(args: PackedStringArray) -> void:
 				ids[b.id] = ids.get(b.id, 0) + 1
 			print("     mass=%d wheels=%d %s" % [st.mass, st.wheels, ids])
 	await _tnt_test()
+	await _crash_test()
 	fails += _builder_test()
 	print("SIMTEST DONE fails=%d" % fails)
 
@@ -246,6 +247,30 @@ func _sim(d: Dictionary) -> Dictionary:
 	main.back_to_builder()
 	await _frames(2)
 	return {"ok": ok, "kind": kind, "msg": msg}
+
+
+func _crash_test() -> void:
+	for idx in [0, 2, 3]:
+		var d: Dictionary = Designs.presets()[idx]
+		main.builder.load_design(d, false)
+		main.start_test("sky")
+		var v: RigidBody3D = main.vehicle
+		Controls.sim = {"always": 1.0}
+		await _frames(60 * 9)
+		print("CRASH drop %-18s intact=%.2f alive=%s" % [d.name, v.intact(), v.alive])
+		main.back_to_builder()
+		await _frames(2)
+	# full-speed rocket car into the mesa wall
+	main.builder.load_design(Designs.presets()[4], false)
+	main.start_test("desert")
+	var rc: RigidBody3D = main.vehicle
+	rc.global_transform = Transform3D(Basis(Vector3.UP, PI * 0.75), Vector3(-200, 12, -180))
+	Controls.sim = {"throttle": 1.0, "boost": 1.0}
+	await _frames(60 * 6)
+	print("CRASH rocket car into mesa intact=%.2f alive=%s" % [rc.intact(), rc.alive])
+	Controls.sim = {"always": 1.0}
+	main.back_to_builder()
+	await _frames(2)
 
 
 func _tnt_test() -> void:

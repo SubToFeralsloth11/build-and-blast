@@ -25,6 +25,8 @@ var alive_count := 0
 var activity := 0.0
 var grounded := 0
 var _dirty_split := false
+var _crash: Array = []        # [local_pos, dv] collected in _integrate_forces
+var _crash_cd := 0.0
 var _rids: Array[RID] = []
 var _engine: AudioStreamPlayer3D
 var _laser_snd: AudioStreamPlayer3D
@@ -48,6 +50,8 @@ func build(d: Dictionary) -> void:
 	physics_material_override = pm
 	add_to_group("damageable")
 	add_to_group("vehicle")
+	contact_monitor = true
+	max_contacts_reported = 6
 	_rids = [get_rid()]
 	for b in d.get("blocks", []):
 		var def := Blocks.get_def(b.id)
@@ -85,7 +89,8 @@ func build(d: Dictionary) -> void:
 		if def.has("radius"):
 			p["dust"] = _emitter(pos + Vector3(0, -def.radius, 0.3), Color("#d8b98c"))
 		elif b.id == "boatprop":
-			p["dust"] = _emitter(pos + Vector3(0, 0, 0.8), Color(0.9, 0.97, 1.0))
+			p["dust"] = _emitter(pos + Vector3(0, 0.9, 1.0), Color(0.9, 0.97, 1.0))
+			p.dust.amount = 48
 		if b.id == "seat" and seat_idx < 0:
 			seat_idx = parts.size()
 		by_cell[cell] = parts.size()
@@ -158,6 +163,11 @@ func _pv(wp: Vector3, com_w: Vector3) -> Vector3:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
+	_crash_cd -= delta
+	if not _crash.is_empty():
+		_apply_crash()
+		if not alive:
+			return
 	if _dirty_split:
 		_dirty_split = false
 		_split_disconnected()
@@ -541,6 +551,42 @@ func _turret(p: Dictionary, wp: Vector3, firing: bool, delta: float, pw: float) 
 
 
 # ---------------------------------------------------------------- damage
+
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if not alive or _crash_cd > 0.0:
+		return
+	var inv := state.transform.affine_inverse()
+	for i in state.get_contact_count():
+		var dv := state.get_contact_impulse(i).length() / maxf(mass, 1.0)
+		if dv > 8.0:
+			_crash.append([inv * state.get_contact_local_position(i), dv])
+
+
+## Hard impacts break the blocks closest to the contact point.
+func _apply_crash() -> void:
+	var worst := 0.0
+	for c in _crash:
+		var lp: Vector3 = c[0]
+		var dv: float = c[1]
+		worst = maxf(worst, dv)
+		var hits := []
+		for i in parts.size():
+			if parts[i].alive:
+				hits.append([lp.distance_squared_to(parts[i].pos), i])
+		hits.sort_custom(func(a, b): return a[0] < b[0])
+		for k in mini(3, hits.size()):
+			damage_part(hits[k][1], (dv - 8.0) * 22.0 / (k + 1))
+			if not alive:
+				break
+		if not alive:
+			break
+	_crash.clear()
+	_crash_cd = 0.25
+	if worst > 12.0:
+		Sfx.play("hit", com_world(), 4.0, 0.45)
+		Fx.shake.emit(com_world(), worst * 0.04)
+
+
 
 func take_hit(dmg: float, pos: Vector3, shape_idx: int, dir: Vector3) -> void:
 	if not alive:
