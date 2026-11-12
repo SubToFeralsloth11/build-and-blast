@@ -29,7 +29,10 @@ var _focus_goal := Vector3.ZERO
 
 var _ghost: Node3D
 var _ghost_m: Node3D
-var _ghost_key := ""
+var _ghost_id := ""
+var _ghost_rot := -1
+var _ghost_ok := -1
+var _ghost_m_ok := -1
 var _hover_box: Node3D
 var _sel_box: Node3D
 var _mirror_plane: MeshInstance3D
@@ -386,14 +389,14 @@ func apply_cfg_to_all(c: Vector3i) -> int:
 
 func rotate_block(axis: Vector3, steps := 1) -> void:
 	rot = Blocks.rotate_index(rot, axis, steps)
-	_ghost_key = ""
+	_ghost_id = ""
 	Sfx.play("click", null, -10.0)
 
 
 func set_block(id: String) -> void:
 	block_id = id
 	rot = 0
-	_ghost_key = ""
+	_ghost_id = ""
 	if tool != "build":
 		tool = "build"
 	_select(null)
@@ -481,7 +484,7 @@ func _unhandled_input(e: InputEvent) -> void:
 							if b.id != "seat":
 								block_id = b.id
 								rot = b.r
-								_ghost_key = ""
+								_ghost_id = ""
 								tool = "build"
 								changed.emit()
 								message.emit("Picked %s" % Blocks.defs[b.id].name)
@@ -584,24 +587,32 @@ func _update_ghost() -> void:
 	var target := Vector3i.ZERO
 	if show_ghost:
 		target = _hover_cell + _hover_normal
-	var key := "%s_%d" % [block_id, rot]
-	if key != _ghost_key:
-		_ghost_key = key
+	if block_id != _ghost_id or rot != _ghost_rot:
+		_ghost_id = block_id
+		_ghost_rot = rot
 		for g in [_ghost, _ghost_m]:
 			if g:
 				g.queue_free()
 		_ghost = _make_ghost(rot)
 		_ghost_m = _make_ghost(Blocks.mirror_index(rot))
+		_ghost_ok = -1
+		_ghost_m_ok = -1
 	var ok := show_ghost and _can_place(target, block_id)
 	_ghost.visible = show_ghost
 	if show_ghost:
 		_ghost.position = Vector3(target)
-		Blocks.ghostify(_ghost, ok)
+		# Re-tinting walks the whole ghost; only do it when the colour changes.
+		if int(ok) != _ghost_ok:
+			_ghost_ok = int(ok)
+			Blocks.ghostify(_ghost, ok)
 	var mc := _mirror_cell(target)
 	_ghost_m.visible = show_ghost and mirror and mc != target
 	if _ghost_m.visible:
 		_ghost_m.position = Vector3(mc)
-		Blocks.ghostify(_ghost_m, _can_place(mc, block_id))
+		var mok := _can_place(mc, block_id)
+		if int(mok) != _ghost_m_ok:
+			_ghost_m_ok = int(mok)
+			Blocks.ghostify(_ghost_m, mok)
 	_hover_box.visible = _hover_cell != null and tool != "build"
 	if _hover_box.visible:
 		_hover_box.position = Vector3(_hover_cell)

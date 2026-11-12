@@ -451,6 +451,9 @@ func _build_bottom() -> void:
 	h.add_child(sp)
 	_hint = UI.label("", 14, UI.MUTED)
 	h.add_child(_hint)
+	var power_btn := UI.button(Power.label(), Power.cycle, "Auto turns it on while unplugged: lower 3D resolution, smaller shadows")
+	Power.changed.connect(func(): power_btn.text = Power.label())
+	h.add_child(power_btn)
 	_toast = UI.label("", 22, Color.WHITE)
 	_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_toast.offset_top = 86

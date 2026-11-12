@@ -80,6 +80,13 @@ In **Configure**, each mechanism has a key, an invert option, a speed (Power) an
 
 There are 16 presets: Starter Buggy, Battle Buggy, Monster Masher, Iron Rhino Tank, Nitro Rocket Car, Sky Sparrow, Thunder Jet, Bomber Pelican, Hornet Chopper, Wave Rider, Gunboat Kraken, Balloon Barge, Mega Crane (turntable, heavy servo, telescopic piston and super magnet), Bouncy Lowrider (air suspension), Hover Viper (hover pads) and Yellow Submarine (ballast tanks). **Random!** generates a new car, monster truck, plane, helicopter or boat with random size, colours, wheel type, suspension, weapons and gadgets. Planes are balanced so their centre of mass sits ahead of their lift. Helicopters get enough rotors to hover. Saved designs go to `user://designs/*.json`.
 
+## Battery use
+
+- The game is capped at 60 FPS, so 120 Hz screens don't draw twice as many frames.
+- The garage and the pause menu drop to 20 FPS after 1.5 seconds without input. Any input brings back 60.
+- Clicking away from the window pauses the test drive and drops the game to 8 FPS.
+- **Battery saver** (button in the garage's bottom bar and in the pause menu) cycles Auto / On / Off. Auto turns it on while the laptop is unplugged (checked every 30 s on macOS and Linux). It renders the 3D view at a lower resolution with FSR upscaling, halves the shadow map and turns off MSAA. The UI stays sharp and the game keeps 60 FPS. The choice is saved in `user://settings.cfg`.
+
 ## Developer checks
 
 ```sh

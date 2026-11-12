@@ -142,6 +142,7 @@ func back_to_builder() -> void:
 	bui.visible = true
 	hud.visible = false
 	Controls.enabled = false
+	Power.interactive = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	env.fog_enabled = false
 
@@ -166,6 +167,7 @@ func start_test(loc: String) -> void:
 	_spawn_vehicle()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	Controls.enabled = true
+	Power.interactive = true
 	hud.toast("%s - %s" % [design.name, World.SPAWNS[loc].name], Color("#ffd23f"))
 
 
@@ -231,6 +233,7 @@ func _set_paused(on: bool) -> void:
 	hud.set_paused(on)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
 	Controls.enabled = not on
+	Power.interactive = not on
 
 
 func _flip() -> void:
@@ -246,6 +249,12 @@ func _flip() -> void:
 
 
 # ---------------------------------------------------------------- input
+
+func _notification(what: int) -> void:
+	# Leaving the window pauses the test drive, so physics and effects stop too.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and mode == "test" and not paused:
+		_set_paused(true)
+
 
 func _unhandled_input(e: InputEvent) -> void:
 	if mode == "build":

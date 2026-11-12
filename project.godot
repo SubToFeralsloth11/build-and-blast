@@ -15,6 +15,7 @@ Controls="*res://scripts/controls.gd"
 Sfx="*res://scripts/sfx.gd"
 Fx="*res://scripts/fx.gd"
 Designs="*res://scripts/designs.gd"
+Power="*res://scripts/power.gd"
 
 [display]
 

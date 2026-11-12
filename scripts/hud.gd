@@ -179,6 +179,9 @@ func _build_pause() -> void:
 	_enemy_btn.toggle_mode = true
 	_enemy_btn.button_pressed = true
 	v.add_child(_enemy_btn)
+	var power_btn := UI.button(Power.label(), Power.cycle, "Auto turns it on while unplugged: lower 3D resolution, smaller shadows")
+	Power.changed.connect(func(): power_btn.text = Power.label())
+	v.add_child(power_btn)
 	v.add_child(UI.accent_button("Back to garage", func(): garage.emit(), UI.ACCENT))
 	v.add_child(UI.button("Quit game", func(): get_tree().quit()))
 	_pause.visible = false
