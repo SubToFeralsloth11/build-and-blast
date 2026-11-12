@@ -24,7 +24,7 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 		if verbose and main.vehicle and is_instance_valid(main.vehicle) and Engine.get_physics_frames() % 30 == 0:
 			var v: RigidBody3D = main.vehicle
-			print("  t=%d spd=%.1f vel=%s y=%.2f up=%.2f fwd=%s grounded=%d" % [Engine.get_physics_frames(), v.linear_velocity.length(), v.linear_velocity.snapped(Vector3.ONE * 0.1), v.com_world().y, v.global_basis.y.y, (-v.global_basis.z).snapped(Vector3.ONE * 0.01), v.grounded])
+			print("  t=%d spd=%.1f vel=%s y=%.2f up=%.2f fwd=%s grounded=%d mass=%.0f sleep=%s freeze=%s inertia=%s" % [Engine.get_physics_frames(), v.linear_velocity.length(), v.linear_velocity.snapped(Vector3.ONE * 0.1), v.com_world().y, v.global_basis.y.y, (-v.global_basis.z).snapped(Vector3.ONE * 0.01), v.grounded, v.mass, v.sleeping, v.freeze, v.inertia])
 
 
 func _kind(d: Dictionary) -> String:
@@ -76,6 +76,9 @@ func _simtest(args: PackedStringArray) -> void:
 			print("     mass=%d wheels=%d %s" % [st.mass, st.wheels, ids])
 	await _tnt_test()
 	await _crash_test()
+	fails += await _mech_test()
+	fails += await _catalog_test()
+	fails += await _dive_test()
 	fails += _builder_test()
 	print("SIMTEST DONE fails=%d" % fails)
 
@@ -273,6 +276,119 @@ func _crash_test() -> void:
 	await _frames(2)
 
 
+## Spawns every block in the catalog (one test vehicle per category) and pulses
+## every control channel, so each block's behaviour code runs at least once.
+func _catalog_test() -> int:
+	var f := 0
+	print("CATALOG blocks=%d" % Blocks.order.size())
+	for cat in Blocks.CATS:
+		var ids := Blocks.ids_in(cat)
+		var b := Designs.DB.new()
+		var n := ids.size()
+		for z in range(-1, n + 1):
+			for x in range(-1, 2):
+				b.add("cube", x, 0, z * 2)
+				if z < n:
+					b.add("cube", x, 0, z * 2 + 1)
+		b.put("seat", 0, 0, -2)
+		var k := 0
+		for id in ids:
+			if id == "seat":
+				continue
+			b.add(id, 0, 1, k * 2)
+			k += 1
+		for x in [-1, 1]:
+			b.add("wheel", x * 2, 0, 0)
+			b.add("wheel", x * 2, 0, n * 2)
+		var d := b.done("CAT " + cat)
+		main.builder.load_design(d, false)
+		main.start_test("desert")
+		var v: RigidBody3D = main.vehicle
+		var seq := [{"throttle": 1.0, "always": 1.0}, {"lift": 1.0, "fire1": 1.0, "always": 1.0}, {"lift": -1.0, "fire2": 1.0, "steer": 1.0, "always": 1.0},
+			{"act1": 1.0, "act2": 1.0, "act3": 1.0, "fire3": 1.0, "boost": 1.0, "always": 1.0}, {"pitch": 1.0, "roll": -1.0, "yaw": 1.0, "horn": 1.0, "always": 1.0},
+			{"throttle": -1.0, "always": 1.0}]
+		for st in seq:
+			Controls.sim = st
+			await _frames(30)
+		Controls.sim = {"always": 1.0}
+		await _frames(30)
+		var lv: Vector3 = v.linear_velocity
+		var ok := not is_nan(lv.x) and lv.length() < 400.0
+		print("%s catalog %-11s blocks=%d intact=%.2f alive=%s" % ["PASS" if ok else "FAIL", cat, k, v.intact(), v.alive])
+		if not ok:
+			f += 1
+		main.back_to_builder()
+		await _frames(2)
+	return f
+
+
+## The submarine preset must sink with flooded tanks and come back up when blown.
+func _dive_test() -> int:
+	var d: Dictionary = Designs.presets()[15]
+	main.builder.load_design(d, false)
+	main.start_test("sea")
+	var v: RigidBody3D = main.vehicle
+	Controls.sim = {"lift": -1.0, "always": 1.0}
+	await _frames(60 * 7)
+	var low: float = v.com_world().y
+	Controls.sim = {"lift": 1.0, "always": 1.0}
+	await _frames(60 * 8)
+	var up: float = v.com_world().y
+	Controls.sim = {"always": 1.0}
+	main.back_to_builder()
+	await _frames(2)
+	return _check(low < -3.0 and up > -1.0, "submarine dives (y=%.1f) and resurfaces (y=%.1f)" % [low, up])
+
+
+## Pistons, hinges and rotators must carry what is attached to their output
+## face, and a mechanism whose moving side touches the chassis stays jammed.
+func _mech_test() -> int:
+	var f := 0
+	var b := Designs.DB.new()
+	for z in range(-2, 3):
+		for x in range(-1, 2):
+			b.add("cube", x, 0, z)
+	b.put("seat", 0, 0, 0)
+	for x in [-2, 2]:
+		b.add("wheel", x, 0, -2)
+		b.add("wheel", x, 0, 2)
+	b.add("piston", 0, 1, -2)
+	b.add("cube", 0, 2, -2)
+	b.add("servo", 1, 1, 2, 0, "", {"ch": "pitch", "inv": false, "pow": 100, "mode": "hold"})
+	b.add("cube", 1, 2, 2)
+	b.add("spinner", -1, 1, 2)
+	b.add("wedge", -1, 2, 2)
+	b.add("piston", 0, 1, 0)        # its top block also touches the seat's neighbour: jammed
+	b.add("cube", 0, 2, 0)
+	b.add("cube", 0, 2, 1)
+	b.add("cube", 0, 1, 1)
+	var d := b.done("MECH test")
+	main.builder.load_design(d, false)
+	main.start_test("desert")
+	var v: RigidBody3D = main.vehicle
+	var idx := func(c: Vector3i) -> Dictionary: return v.parts[v.by_cell[c]]
+	Controls.sim = {"always": 1.0}
+	await _frames(30)
+	Controls.sim = {"lift": 1.0, "pitch": 1.0, "yaw": 1.0, "always": 1.0}
+	await _frames(90)
+	var top: Dictionary = idx.call(Vector3i(0, 2, -2))
+	var hinged: Dictionary = idx.call(Vector3i(1, 2, 2))
+	var spun: Dictionary = idx.call(Vector3i(-1, 2, 2))
+	var jam: Dictionary = idx.call(Vector3i(0, 2, 0))
+	f += _check(absf(top.pos.y - 4.0) < 0.15, "piston lifts its block 2 up (y=%.2f)" % top.pos.y)
+	f += _check(hinged.pos.distance_to(Vector3(1, 2, 2)) > 0.5, "servo swings its block (moved %.2f)" % hinged.pos.distance_to(Vector3(1, 2, 2)))
+	f += _check(spun.basis.z.distance_to(Vector3.BACK) > 0.3, "spinner turns its block")
+	f += _check(jam.pos.is_equal_approx(Vector3(0, 2, 0)), "jammed piston does not move")
+	Controls.sim = {"always": 1.0}
+	await _frames(90)
+	f += _check(absf(top.pos.y - 2.0) < 0.15, "return-mode piston retracts on release (y=%.2f)" % top.pos.y)
+	f += _check(hinged.pos.distance_to(Vector3(1, 2, 2)) > 0.5, "hold-mode servo keeps its angle")
+	f += _check(Designs.mech_status(d.blocks, Vector3i(0, 1, -2)) == 1 and Designs.mech_status(d.blocks, Vector3i(0, 1, 0)) == -1, "builder reports moved/jammed")
+	main.back_to_builder()
+	await _frames(2)
+	return f
+
+
 func _tnt_test() -> void:
 	var d: Dictionary = Designs.presets()[3]
 	main.builder.load_design(d, false)
@@ -342,3 +458,33 @@ func _shots() -> void:
 	await _frames(150)
 	await _shot("07_chopper")
 	Controls.sim = {}
+	main.back_to_builder()
+	# mechanisms and the new parts
+	main.builder.load_design(p[12], false)
+	main.bui._select_cat("Mechanical")
+	await _process_frames(30)
+	await _shot("08_garage_crane")
+	main.start_test("desert")
+	Controls.sim = {"lift": 1.0, "pitch": 1.0, "yaw": 1.0, "act3": 1.0, "always": 1.0}
+	await _frames(150)
+	await _shot("09_crane_arm")
+	main.back_to_builder()
+	main.builder.load_design(p[13], false)
+	main.start_test("desert")
+	Controls.sim = {"lift": 1.0, "always": 1.0}
+	await _frames(90)
+	await _shot("10_lowrider_up")
+	main.back_to_builder()
+	main.builder.load_design(p[14], false)
+	main.start_test("sea")
+	Controls.sim = {"throttle": 1.0, "always": 1.0}
+	await _frames(180)
+	await _shot("11_hover_sea")
+	main.back_to_builder()
+	main.builder.load_design(p[15], false)
+	main.start_test("sea")
+	Controls.sim = {"throttle": 1.0, "lift": -1.0, "always": 1.0}
+	await _frames(240)
+	await _shot("12_sub_dive")
+	Controls.sim = {}
+	main.back_to_builder()
