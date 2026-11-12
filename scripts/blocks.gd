@@ -2,12 +2,14 @@ extends Node
 ## Block catalog: definitions, the 24 grid orientations, procedural visuals,
 ## collision shapes and palette icons.
 
-const CATS := ["Structure", "Wheels", "Propulsion", "Flight", "Water", "Weapons", "Gadgets"]
+const CATS := ["Structure", "Wheels", "Mechanical", "Propulsion", "Flight", "Water", "Weapons", "Gadgets"]
 const CAT_COLORS := {
-	"Structure": Color("#9aa4b1"), "Wheels": Color("#e0b341"), "Propulsion": Color("#ff7a3d"),
-	"Flight": Color("#5fb8ff"), "Water": Color("#3fd6c6"), "Weapons": Color("#ff4f5e"),
-	"Gadgets": Color("#b98cff"),
+	"Structure": Color("#9aa4b1"), "Wheels": Color("#e0b341"), "Mechanical": Color("#9ccc65"),
+	"Propulsion": Color("#ff7a3d"), "Flight": Color("#5fb8ff"), "Water": Color("#3fd6c6"),
+	"Weapons": Color("#ff4f5e"), "Gadgets": Color("#b98cff"),
 }
+## Mechanism kinds that carry the blocks attached to their output face.
+const MOVERS := ["piston", "hinge", "rotator"]
 
 var defs := {}
 var order: Array[String] = []
@@ -17,6 +19,7 @@ var _meshes := {}
 var _shapes := {}
 var _icons := {}
 var _block_shader: Shader
+const Models := preload("res://scripts/block_models.gd")
 
 
 func _init() -> void:
@@ -85,6 +88,7 @@ func _d(id: String, nm: String, cat: String, mass: float, hp: float, col: String
 	var d := {
 		"id": id, "name": nm, "cat": cat, "mass": mass, "hp": hp, "color": Color(col),
 		"desc": desc, "shape": "box", "buoy": 0.06, "cfg": {}, "auto_rot": false,
+		"kind": id, "vis": id, "vs": 1.0,
 	}
 	d.merge(extra, true)
 	defs[id] = d
@@ -92,46 +96,7 @@ func _d(id: String, nm: String, cat: String, mass: float, hp: float, col: String
 
 
 func _define_all() -> void:
-	# Structure
-	_d("seat", "Pilot Seat", "Structure", 80, 400, "#ff7a2f", "The core of every vehicle. Lose it and you are wrecked.", {"buoy": 0.18, "unique": true})
-	_d("cube", "Block", "Structure", 25, 90, "#d9dee5", "Sturdy all-round building block.", {"buoy": 0.14})
-	_d("wood", "Wood Block", "Structure", 10, 50, "#b67a44", "Light and floats great. Perfect for boats.", {"buoy": 0.4})
-	_d("armor", "Armor Block", "Structure", 90, 320, "#59616c", "Heavy plate that soaks up bullets and blasts.", {"buoy": 0.05})
-	_d("wedge", "Wedge", "Structure", 18, 70, "#d9dee5", "Sloped block for noses, ramps and style.", {"shape": "wedge", "buoy": 0.1})
-	_d("plate", "Thin Plate", "Structure", 8, 40, "#cfd5dd", "Flat floor plate. Very light.", {"shape": "plate", "buoy": 0.05})
-	# Wheels
-	_d("wheel", "Wheel", "Wheels", 35, 120, "#e8b23a", "Sprung wheel. Front wheels steer automatically.", {"shape": "wheel", "auto_rot": true, "radius": 0.48, "travel": 0.4, "drive": 1150.0, "cfg": {"steer": "auto", "drive": true, "pow": 100}})
-	_d("bigwheel", "Monster Wheel", "Wheels", 70, 220, "#e8b23a", "Huge off-road wheel with long suspension.", {"shape": "bigwheel", "auto_rot": true, "radius": 0.8, "travel": 0.55, "drive": 1700.0, "cfg": {"steer": "auto", "drive": true, "pow": 100}})
-	# Propulsion
-	_d("thruster", "Thruster", "Propulsion", 40, 80, "#c8ced8", "Small jet that pushes toward its pointy end. Works anywhere.", {"thrust": 1900.0, "medium": "any", "flame": 1.2, "cfg": {"ch": "throttle", "inv": false, "pow": 100}})
-	_d("jet", "Jet Engine", "Propulsion", 100, 140, "#9aa3ad", "Powerful air-breathing engine. Dies underwater.", {"thrust": 6200.0, "medium": "air", "flame": 2.2, "cfg": {"ch": "throttle", "inv": false, "pow": 100}})
-	_d("rocket", "Rocket Booster", "Propulsion", 70, 100, "#f2f2f2", "Insane burst of thrust on Shift. Hold on tight!", {"thrust": 14000.0, "medium": "any", "flame": 3.5, "cfg": {"ch": "boost", "inv": false, "pow": 100}})
-	_d("prop", "Propeller", "Propulsion", 50, 90, "#f0c419", "Classic airplane propeller. Strong at low speed.", {"thrust": 4200.0, "medium": "air", "cfg": {"ch": "throttle", "inv": false, "pow": 100}})
-	_d("rotor", "Heli Rotor", "Propulsion", 60, 110, "#7c8794", "Helicopter rotor with altitude hold. Space/C to climb or sink.", {"thrust": 5200.0, "cfg": {"ch": "lift", "inv": false, "pow": 100}})
-	_d("balloon", "Balloon", "Propulsion", 12, 30, "#ff4f6d", "Floats up forever. Pops if shot.", {"lift": 1500.0, "cfg": {"ch": "always", "inv": false, "pow": 100}})
-	# Flight
-	_d("wing", "Wing", "Flight", 15, 70, "#e6ebf2", "Generates lift when moving forward. Leading edge faces forward.", {"shape": "wing", "buoy": 0.06})
-	_d("flap", "Control Flap", "Flight", 15, 60, "#5fb8ff", "Moving surface. Auto-steers pitch, roll and yaw based on where you put it.", {"shape": "wing", "cfg": {"pow": 100}})
-	_d("gyro", "Gyro Stabilizer", "Flight", 40, 80, "#5fd0ff", "Keeps you level and adds steering torque from arrows and A/D.", {"cfg": {"pow": 100}})
-	_d("parachute", "Parachute", "Flight", 20, 50, "#ffffff", "Toggle with 2 for a soft landing or a drag-race stop.", {"cfg": {"ch": "act2", "inv": false, "pow": 100}})
-	# Water
-	_d("float", "Float", "Water", 10, 60, "#ff9a1f", "Huge buoyancy. Keeps anything above water.", {"buoy": 0.95})
-	_d("boatprop", "Boat Propeller", "Water", 40, 90, "#d4a542", "Pushes through water. Only works submerged.", {"thrust": 4600.0, "medium": "water", "cfg": {"ch": "throttle", "inv": false, "pow": 100}})
-	# Weapons
-	_d("mg", "Machine Gun", "Weapons", 30, 70, "#3c434c", "Rapid fire bullets. Aims near your crosshair.", {"cfg": {"ch": "fire1", "inv": false, "pow": 100}})
-	_d("cannon", "Cannon", "Weapons", 90, 150, "#4b5563", "Explosive shells with a big kick.", {"cfg": {"ch": "fire2", "inv": false, "pow": 100}})
-	_d("rockets", "Rocket Pod", "Weapons", 60, 90, "#59616c", "Fires homing rockets toward your crosshair.", {"cfg": {"ch": "fire2", "inv": false, "pow": 100}})
-	_d("laser", "Laser", "Weapons", 40, 70, "#eef2f7", "Continuous beam that melts blocks.", {"cfg": {"ch": "fire1", "inv": false, "pow": 100}})
-	_d("flamer", "Flamethrower", "Weapons", 40, 70, "#d33c2c", "Short range torrent of fire.", {"cfg": {"ch": "fire1", "inv": false, "pow": 100}})
-	_d("bombs", "Bomb Bay", "Weapons", 70, 110, "#4a5a3c", "Drops big bombs on G. Best from a plane.", {"cfg": {"ch": "fire3", "inv": false, "pow": 100}})
-	_d("turret", "Auto Turret", "Weapons", 70, 140, "#5c6b4a", "Swivels to follow your crosshair and fires twin guns.", {"cfg": {"ch": "fire1", "inv": false, "pow": 100}})
-	# Gadgets
-	_d("jump", "Spring Jump", "Gadgets", 40, 90, "#3ddc84", "Launches you along its spring on Space.", {"cfg": {"ch": "lift", "inv": false, "pow": 100}})
-	_d("magnet", "Magnet", "Gadgets", 60, 110, "#e53935", "Toggle with 1 to pull crates, barrels and debris.", {"cfg": {"ch": "act1", "inv": false, "pow": 100}})
-	_d("tnt", "TNT", "Gadgets", 30, 30, "#d32f2f", "Detonate with 4. Also explodes when destroyed!", {"cfg": {"ch": "act4", "inv": false, "pow": 100}})
-	_d("smoke", "Smoke Trail", "Gadgets", 10, 40, "#ff5ec4", "Leaves a colorful trail. Paint it to change the color.", {"cfg": {"ch": "always", "inv": false, "pow": 100}})
-	_d("light", "Headlight", "Gadgets", 8, 30, "#2b2f36", "Bright spotlight. Toggle with 3.", {"cfg": {"ch": "act3", "inv": true, "pow": 100}})
-	_d("horn", "Horn", "Gadgets", 8, 30, "#e0b341", "HONK. Press H.", {"cfg": {"ch": "horn", "inv": false, "pow": 100}})
+	preload("res://scripts/block_catalog.gd").define(self)
 
 
 func get_def(id: String) -> Dictionary:
@@ -323,6 +288,56 @@ func wedge_mesh() -> Mesh:
 	return m
 
 
+const _H := 0.5
+## Convex block shapes: [points, faces]. Faces list point indices of each polygon.
+var POLYS := {
+	"corner": [[Vector3(-_H, -_H, -_H), Vector3(_H, -_H, -_H), Vector3(-_H, -_H, _H), Vector3(_H, -_H, _H), Vector3(-_H, _H, _H)],
+		[[0, 1, 3, 2], [2, 3, 4], [0, 2, 4], [0, 1, 4], [1, 3, 4]]],
+	"inner": [[Vector3(-_H, -_H, -_H), Vector3(_H, -_H, -_H), Vector3(-_H, -_H, _H), Vector3(_H, -_H, _H), Vector3(-_H, _H, -_H), Vector3(-_H, _H, _H), Vector3(_H, _H, _H)],
+		[[0, 1, 3, 2], [2, 3, 6, 5], [0, 2, 5, 4], [4, 5, 6], [0, 1, 4], [1, 3, 6], [4, 1, 6]]],
+	"lowwedge": [[Vector3(-_H, -_H, -_H), Vector3(_H, -_H, -_H), Vector3(-_H, -_H, _H), Vector3(_H, -_H, _H), Vector3(-_H, 0, _H), Vector3(_H, 0, _H)],
+		[[0, 1, 3, 2], [2, 3, 5, 4], [0, 1, 5, 4], [0, 2, 4], [1, 3, 5]]],
+	"pyramid": [[Vector3(-_H, -_H, -_H), Vector3(_H, -_H, -_H), Vector3(-_H, -_H, _H), Vector3(_H, -_H, _H), Vector3(0, _H, 0)],
+		[[0, 1, 3, 2], [0, 1, 4], [1, 3, 4], [3, 2, 4], [2, 0, 4]]],
+}
+
+
+## Flat-shaded convex mesh from points and polygon faces (normals point away from the centre).
+func poly_mesh(key: String, pts: Array, faces: Array) -> Mesh:
+	if _meshes.has(key):
+		return _meshes[key]
+	var ctr := Vector3.ZERO
+	for p: Vector3 in pts:
+		ctr += p
+	ctr /= pts.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for f: Array in faces:
+		var a: Vector3 = pts[f[0]]
+		var n: Vector3 = (pts[f[1]] - a).cross(pts[f[2]] - a).normalized()
+		if n.dot(a - ctr) < 0.0:
+			n = -n
+		for k in range(1, f.size() - 1):
+			add_tri(st, a, pts[f[k]], pts[f[k + 1]], n)
+	var m := st.commit()
+	_meshes[key] = m
+	return m
+
+
+## [mesh, offset] for a structural shape name.
+func shape_mesh(shp: String) -> Array:
+	match shp:
+		"wedge": return [wedge_mesh(), Vector3.ZERO]
+		"plate": return [box_mesh(Vector3(1, 0.2, 1)), Vector3(0, -0.4, 0)]
+		"half": return [box_mesh(Vector3(1, 0.5, 1)), Vector3(0, -0.25, 0)]
+		"cyl": return [cyl_mesh(0.5, 0.5, 1.0, 20), Vector3.ZERO]
+		"beam": return [box_mesh(Vector3(0.34, 1, 0.34)), Vector3.ZERO]
+		"ball": return [sphere_mesh(0.5), Vector3.ZERO]
+		"corner", "inner", "lowwedge", "pyramid":
+			return [poly_mesh(shp, POLYS[shp][0], POLYS[shp][1]), Vector3.ZERO]
+	return [box_mesh(Vector3.ONE), Vector3.ZERO]
+
+
 func _mi(parent: Node3D, mesh: Mesh, pos: Vector3, material: Material, rot := Vector3.ZERO) -> MeshInstance3D:
 	var m := MeshInstance3D.new()
 	m.mesh = mesh
@@ -398,8 +413,25 @@ func _particles(parent: Node3D, nm: String, pos: Vector3, dir: Vector3, col: Col
 
 func make_visual(id: String, col: Color) -> Node3D:
 	var r := Node3D.new()
+	var def: Dictionary = defs[id]
+	if not Models.build(r, def, col):
+		_base_visual(r, def, col)
+	if def.vis == "flap" and def.get("nrm", Vector3.UP) == Vector3.RIGHT:
+		# upright flap (rudder): its surface normal is local X
+		var upright := Transform3D(Basis(Vector3.BACK, -PI * 0.5), Vector3.ZERO)
+		for c in r.get_children():
+			c.transform = upright * c.transform
+	var vs: float = def.vs
+	if vs != 1.0:
+		var sc := Transform3D(Basis.from_scale(Vector3.ONE * vs), Vector3.ZERO)
+		for c in r.get_children():
+			c.transform = sc * c.transform
+	return r
+
+
+func _base_visual(r: Node3D, def: Dictionary, col: Color) -> void:
 	var dk := col.darkened(0.35)
-	match id:
+	match def.vis:
 		"cube":
 			_mi(r, box_mesh(Vector3.ONE), Vector3.ZERO, block_mat(col))
 		"wood":
@@ -425,21 +457,8 @@ func make_visual(id: String, col: Color) -> Node3D:
 			_mi(r, box_mesh(Vector3(0.36, 0.34, 0.24)), Vector3(0, 0.18, 0.18), mat(Color("#e9edf2"), 0.3, 0.4))
 			_mi(r, sphere_mesh(0.19), Vector3(0, 0.5, 0.16), mat(Color("#f4f6f9"), 0.3, 0.3))
 			_mi(r, box_mesh(Vector3(0.3, 0.1, 0.06)), Vector3(0, 0.52, -0.02), glow_mat(Color("#39e1ff"), 2.5))
-		"wheel", "bigwheel":
-			var rad: float = defs[id].radius
-			var w := rad * 0.8
-			var spin := _node(r, "spin")
-			_mi(spin, cyl_mesh(rad, rad, w, 24), Vector3.ZERO, mat(RUBBER, 0.0, 0.95), Vector3(0, 0, PI * 0.5))
-			_mi(spin, cyl_mesh(rad * 0.62, rad * 0.62, w + 0.02, 16), Vector3.ZERO, mat(col, 0.5, 0.35), Vector3(0, 0, PI * 0.5))
-			_mi(spin, cyl_mesh(rad * 0.2, rad * 0.2, w + 0.06, 10), Vector3.ZERO, mat(STEEL, 0.8, 0.3), Vector3(0, 0, PI * 0.5))
-			for i in 3:
-				var s := _node(spin, "s%d" % i)
-				s.rotation.x = i * PI / 3.0
-				_mi(s, box_mesh(Vector3(w + 0.04, rad * 1.15, rad * 0.14)), Vector3.ZERO, mat(col.darkened(0.25), 0.5, 0.4))
-			for i in 10:
-				var t := _node(spin, "t%d" % i)
-				t.rotation.x = i * TAU / 10.0
-				_mi(t, box_mesh(Vector3(w * 0.9, 0.08, rad * 0.22)), Vector3(0, rad, 0), mat(RUBBER, 0.0, 1.0))
+		"wheel":
+			Models.wheel(r, def, col)
 		"thruster":
 			_mi(r, cyl_mesh(0.32, 0.32, 0.75, 16), Vector3(0, 0, -0.08), mat(col, 0.6, 0.35), Vector3(PI * 0.5, 0, 0))
 			_mi(r, sphere_mesh(0.32), Vector3(0, 0, -0.45), mat(col, 0.6, 0.35))
@@ -565,10 +584,12 @@ func make_visual(id: String, col: Color) -> Node3D:
 			_mi(r, box_mesh(Vector3(0.4, 0.4, 0.85)), Vector3(0, -0.05, 0.05), mat(col, 0.5, 0.25))
 			_mi(r, box_mesh(Vector3(0.6, 0.06, 0.3)), Vector3(0, -0.05, 0.25), mat(DARK, 0.5, 0.3))
 			_mi(r, cyl_mesh(0.1, 0.14, 0.3, 12), Vector3(0, -0.05, -0.48), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
-			_mi(r, cyl_mesh(0.07, 0.07, 0.02, 12), Vector3(0, -0.05, -0.64), glow_mat(Color("#ff2244"), 4.0), Vector3(PI * 0.5, 0, 0))
+			var lc := Color(def.get("lcol", "#ff2244"))
+			var bw: float = def.get("width", 1.0)
+			_mi(r, cyl_mesh(0.07, 0.07, 0.02, 12), Vector3(0, -0.05, -0.64), glow_mat(lc, 4.0), Vector3(PI * 0.5, 0, 0))
 			var beam := _node(r, "beam", Vector3(0, -0.05, -0.65))
-			_mi(beam, cyl_mesh(0.06, 0.06, 1.0, 8), Vector3(0, 0, -0.5), glow_mat(Color("#ff2244"), 6.0, true), Vector3(PI * 0.5, 0, 0))
-			_mi(beam, cyl_mesh(0.025, 0.025, 1.0, 6), Vector3(0, 0, -0.5), glow_mat(Color(1, 0.9, 0.9), 8.0, true), Vector3(PI * 0.5, 0, 0))
+			_mi(beam, cyl_mesh(0.06 * bw, 0.06 * bw, 1.0, 8), Vector3(0, 0, -0.5), glow_mat(lc, 6.0, true), Vector3(PI * 0.5, 0, 0))
+			_mi(beam, cyl_mesh(0.025 * bw, 0.025 * bw, 1.0, 6), Vector3(0, 0, -0.5), glow_mat(lc.lerp(Color.WHITE, 0.85), 8.0, true), Vector3(PI * 0.5, 0, 0))
 			beam.visible = false
 		"flamer":
 			_mi(r, cyl_mesh(0.24, 0.24, 0.7, 14), Vector3(0, -0.12, 0.2), mat(col, 0.4, 0.4))
@@ -590,8 +611,16 @@ func make_visual(id: String, col: Color) -> Node3D:
 			_mi(yaw, cyl_mesh(0.36, 0.4, 0.4, 16), Vector3(0, 0.15, 0), mat(col, 0.4, 0.45))
 			var pt := _node(yaw, "pitch", Vector3(0, 0.25, 0))
 			_mi(pt, box_mesh(Vector3(0.5, 0.26, 0.42)), Vector3.ZERO, mat(col.darkened(0.15), 0.4, 0.45))
-			for x in [-0.13, 0.13]:
-				_mi(pt, cyl_mesh(0.05, 0.05, 0.9, 8), Vector3(x, 0, -0.6), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
+			if def.id == "turret":
+				for x in [-0.13, 0.13]:
+					_mi(pt, cyl_mesh(0.05, 0.05, 0.9, 8), Vector3(x, 0, -0.6), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
+			elif def.has("proj"):
+				_mi(pt, cyl_mesh(0.09, 0.1, 1.1, 12), Vector3(0, 0, -0.7), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
+				_mi(pt, cyl_mesh(0.13, 0.13, 0.18, 12), Vector3(0, 0, -1.2), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
+			else:
+				var tc := Color(def.get("tcol", "#ff5ec4"))
+				_mi(pt, cyl_mesh(0.06, 0.08, 0.8, 10), Vector3(0, 0, -0.55), mat(DARK, 0.8, 0.3), Vector3(PI * 0.5, 0, 0))
+				_mi(pt, sphere_mesh(0.07), Vector3(0, 0, -0.97), glow_mat(tc, 4.0))
 		"jump":
 			_mi(r, box_mesh(Vector3(0.9, 0.18, 0.9)), Vector3(0, 0.41, 0), mat(col, 0.3, 0.5))
 			var coil := _node(r, "coil")
@@ -623,7 +652,7 @@ func make_visual(id: String, col: Color) -> Node3D:
 			_mi(r, cyl_mesh(0.28, 0.28, 0.75, 14), Vector3(0, -0.1, -0.05), mat(col, 0.3, 0.45))
 			_mi(r, sphere_mesh(0.28), Vector3(0, 0.27, -0.05), mat(col, 0.3, 0.45))
 			_mi(r, cyl_mesh(0.08, 0.12, 0.4, 10), Vector3(0, -0.1, 0.35), mat(DARK, 0.7, 0.4), Vector3(PI * 0.5, 0, 0))
-			_particles(r, "particles", Vector3(0, -0.1, 0.6), Vector3(0, 0, 1), col, false)
+			_particles(r, "particles", Vector3(0, -0.1, 0.6), Vector3(0, 0, 1), col, def.get("fire", false))
 		"light":
 			_mi(r, box_mesh(Vector3(0.7, 0.45, 0.4)), Vector3(0, -0.1, 0.12), mat(col, 0.4, 0.4))
 			_mi(r, cyl_mesh(0.22, 0.24, 0.12, 16), Vector3(0, -0.1, -0.12), mat(STEEL, 0.9, 0.2), Vector3(PI * 0.5, 0, 0))
@@ -632,9 +661,9 @@ func make_visual(id: String, col: Color) -> Node3D:
 			var sl := SpotLight3D.new()
 			sl.name = "lamp"
 			sl.position = Vector3(0, -0.1, -0.3)
-			sl.spot_range = 45.0
-			sl.spot_angle = 28.0
-			sl.light_energy = 6.0
+			sl.spot_range = def.get("range", 45.0)
+			sl.spot_angle = def.get("angle", 28.0)
+			sl.light_energy = def.get("energy", 6.0)
 			sl.light_color = Color("#fff3d1")
 			sl.visible = false
 			r.add_child(sl)
@@ -643,7 +672,6 @@ func make_visual(id: String, col: Color) -> Node3D:
 			_mi(r, cyl_mesh(0.32, 0.07, 0.75, 16), Vector3(0, -0.05, -0.2), mat(col, 0.9, 0.2), Vector3(-PI * 0.5, 0, 0))
 		_:
 			_mi(r, box_mesh(Vector3.ONE * 0.9), Vector3.ZERO, mat(col))
-	return r
 
 
 ## Replaces every surface material in a visual with a ghost material.
@@ -662,6 +690,14 @@ func ghostify(n: Node, ok: bool) -> void:
 ## Returns [Shape3D, local Transform3D] for the block's collider inside its cell.
 func shape_for(id: String) -> Array:
 	var kind: String = defs[id].shape if defs.has(id) else "box"
+	if kind == "wheel":
+		# small sphere in the hub: the raycast suspension carries the wheel
+		var rad: float = defs[id].radius
+		kind = "wheel%.2f" % rad
+		if not _shapes.has(kind):
+			var s := SphereShape3D.new()
+			s.radius = rad * 0.58
+			_shapes[kind] = [s, Transform3D.IDENTITY]
 	if not _shapes.has(kind):
 		match kind:
 			"wedge":
@@ -678,10 +714,31 @@ func shape_for(id: String) -> Array:
 				var b := BoxShape3D.new()
 				b.size = Vector3(1, 0.14, 1)
 				_shapes[kind] = [b, Transform3D.IDENTITY]
-			"wheel", "bigwheel":
-				var s := SphereShape3D.new()
-				s.radius = 0.28 if kind == "wheel" else 0.46
-				_shapes[kind] = [s, Transform3D.IDENTITY]
+			"lid":
+				var b := BoxShape3D.new()
+				b.size = Vector3(1, 0.12, 1)
+				_shapes[kind] = [b, Transform3D(Basis.IDENTITY, Vector3(0, 0.44, 0))]
+			"half":
+				var b := BoxShape3D.new()
+				b.size = Vector3(1, 0.5, 1)
+				_shapes[kind] = [b, Transform3D(Basis.IDENTITY, Vector3(0, -0.25, 0))]
+			"beam":
+				var b := BoxShape3D.new()
+				b.size = Vector3(0.34, 1, 0.34)
+				_shapes[kind] = [b, Transform3D.IDENTITY]
+			"cyl":
+				var c := CylinderShape3D.new()
+				c.radius = 0.5
+				c.height = 1.0
+				_shapes[kind] = [c, Transform3D.IDENTITY]
+			"ball":
+				var c := SphereShape3D.new()
+				c.radius = 0.5
+				_shapes[kind] = [c, Transform3D.IDENTITY]
+			"corner", "inner", "lowwedge", "pyramid":
+				var c := ConvexPolygonShape3D.new()
+				c.points = PackedVector3Array(POLYS[kind][0])
+				_shapes[kind] = [c, Transform3D.IDENTITY]
 			_:
 				var b := BoxShape3D.new()
 				b.size = Vector3.ONE
@@ -704,18 +761,14 @@ func icon(id: String) -> Texture2D:
 	vp.add_child(root)
 	var v := make_visual(id, defs[id].color)
 	root.add_child(v)
-	if id == "wheel" or id == "bigwheel":
+	var def: Dictionary = defs[id]
+	if def.kind == "wheel":
 		v.rotation = Vector3(0, PI * 0.5, 0)
 	var cam := Camera3D.new()
-	var ext := 1.0
-	match id:
-		"balloon": ext = 3.2
-		"rotor": ext = 3.6
-		"parachute": ext = 1.3
-		"bigwheel": ext = 1.7
+	var ext: float = def.get("icon_ext", 1.0)
 	cam.fov = 34
 	var dir := Vector3(1.0, 0.8, 1.15).normalized()
-	var focus := Vector3(0, 1.1, 0) if id == "balloon" else Vector3.ZERO
+	var focus: Vector3 = def.get("icon_focus", Vector3.ZERO)
 	var cpos := focus + dir * (2.6 * ext)
 	cam.transform = Transform3D(Basis.looking_at(focus - cpos, Vector3.UP), cpos)
 	root.add_child(cam)

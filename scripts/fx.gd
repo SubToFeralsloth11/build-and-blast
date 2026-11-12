@@ -102,9 +102,27 @@ func cone_damage(from: Vector3, dir: Vector3, rng: float, dmg: float, exclude: A
 			burst(h.position, Color(1, 0.5, 0.1), 4, 2.0, 0.4, 0.5, Vector3(0, 3, 0), 60.0, Vector3.UP, true)
 
 
-func spawn_projectile(kind: String, pos: Vector3, vel: Vector3, exclude: Array[RID], target := Vector3.INF) -> Node3D:
+## Pushes rigid bodies in a cone (water cannon). No damage.
+func cone_push(from: Vector3, dir: Vector3, rng: float, impulse: float, exclude: Array[RID]) -> void:
+	for i in 3:
+		var d := (dir + Vector3(randf_range(-0.12, 0.12), randf_range(-0.12, 0.12), randf_range(-0.12, 0.12))).normalized()
+		var q := PhysicsRayQueryParameters3D.create(from, from + d * rng, MASK_SHOT, exclude)
+		var h := space().intersect_ray(q)
+		if h.is_empty():
+			continue
+		var c = h.collider
+		var k := 1.0 - from.distance_to(h.position) / rng
+		if c is RigidBody3D:
+			(c as RigidBody3D).sleeping = false
+			c.apply_impulse(d * impulse * k / 3.0, h.position - c.global_position)
+		if randf() < 0.4:
+			burst(h.position, Color(0.85, 0.95, 1.0, 0.9), 6, 5.0, 0.2, 0.6, Vector3(0, -12, 0), 60.0, h.normal, false)
+
+
+func spawn_projectile(kind: String, pos: Vector3, vel: Vector3, exclude: Array[RID], target := Vector3.INF, power := 1.0) -> Node3D:
 	var p := Projectile.new()
 	p.kind = kind
+	p.power = power
 	p.vel = vel
 	p.exclude = exclude
 	p.target = target
