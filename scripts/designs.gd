@@ -9,7 +9,11 @@ const SCHEMES := [
 	["#ffcc00", "#2b2f36"], ["#b98cff", "#2a2140"], ["#f2f2f2", "#e53935"], ["#ff5ec4", "#3fd6c6"],
 	["#59616c", "#ffcc00"], ["#1e88e5", "#ffcc00"], ["#8d6e63", "#3ddc84"], ["#26c6da", "#ff7043"],
 ]
-const WEAPONS := ["mg", "cannon", "rockets", "laser", "flamer", "turret"]
+const WEAPONS := ["mg", "cannon", "rockets", "laser", "flamer", "turret", "minigun", "hmg", "shotgun", "autocannon",
+	"plasmacannon", "missile", "grenade", "tesla", "laserturret", "cannonturret", "pulselaser", "heavylaser", "sniper", "flak"]
+const CAR_WHEELS := ["wheel", "wheel", "offroad", "rally", "racing", "spiked", "drift", "hubmotor", "classic"]
+const SUSPENSIONS := ["spring", "shock", "longsusp", "racesusp", "heavysusp", "airsusp"]
+const EXTRA_GADGETS := ["underglow", "nitro", "flag", "siren", "beacon", "airbag", "shield", "repair", "selfrighter", "brakelight"]
 
 
 class DB:
@@ -63,6 +67,10 @@ func presets() -> Array:
 	out.append(_boat({"name": "Wave Rider", "len": 6, "hw": 1, "scheme": ["#f2f2f2", "#1e88e5"], "weapons": ["mg"], "gadgets": ["smoke", "horn"]}))
 	out.append(_boat({"name": "Gunboat Kraken", "len": 8, "hw": 2, "scheme": ["#59616c", "#e53935"], "weapons": ["cannon", "turret", "rockets"], "gadgets": ["light"]}))
 	out.append(_barge())
+	out.append(_crane())
+	out.append(_lowrider())
+	out.append(_hovercraft())
+	out.append(_sub())
 	return out
 
 
@@ -97,7 +105,8 @@ func _car(o: Dictionary) -> Dictionary:
 	var wz := [z0, z1]
 	if o.get("six", false) or mat == "armor":
 		wz = [z0, (z0 + z1) / 2, z1]
-	var wid := "bigwheel" if big else "wheel"
+	var wid: String = o.get("wheel", "bigwheel" if big else "wheel")
+	var susp: String = o.get("susp", "")
 	# heavy armor gets beefier wheel motors
 	var wcfg: Dictionary = Blocks.defs[wid].cfg.duplicate()
 	if mat == "armor":
@@ -106,6 +115,9 @@ func _car(o: Dictionary) -> Dictionary:
 		if big:
 			b.sym("cube", hw + 1, y, z, 0, acc)
 			b.sym(wid, hw + 1, y - 1, z, 0, "", wcfg)
+		elif susp != "":
+			b.sym(susp, hw + 1, y, z, 0, acc)
+			b.sym(wid, hw + 2, y, z, 0, "", wcfg)
 		else:
 			b.sym(wid, hw + 1, y, z, 0, "", wcfg)
 	# rear deck / roll bar
@@ -149,6 +161,17 @@ func _car(o: Dictionary) -> Dictionary:
 				b.add("tnt", 0, top, z1)
 			"magnet":
 				b.add("magnet", 0, y, z1 + 1)
+			"underglow":
+				b.add("underglow", 0, y - 1, 0, 0, acc)
+			"brakelight":
+				b.sym("brakelight", hw, y, z1 + 1)
+			"airbag":
+				b.add("airbag", 0, y, z1 + 1, 0, acc)
+			_:
+				var free := _slots(b, [Vector3i(0, top, z1), Vector3i(hw, top, z1), Vector3i(-hw, top, z1), Vector3i(0, top, 2), Vector3i(hw, top, 0)])
+				if not free.is_empty():
+					var s: Vector3i = free[0]
+					b.add(g, s.x, s.y, s.z, 0, acc)
 	return b.done(o.get("name", "Car"))
 
 
@@ -353,6 +376,99 @@ func _barge() -> Dictionary:
 	return b.done("Balloon Barge")
 
 
+## Truck with a turntable, a hydraulic boom, a telescopic arm and a magnet.
+func _crane() -> Dictionary:
+	var b := DB.new()
+	var col := "#ffcc00"
+	var acc := "#2b2f36"
+	for z in range(-3, 4):
+		for x in range(-1, 2):
+			b.add("cube", x, 0, z, 0, col)
+	b.put("seat", 0, 0, -2)
+	b.add("glass_wedge", 0, 1, -3, 0, "")
+	for x in range(-1, 2):
+		b.add("wedge", x, 0, -4, 0, acc)
+	for z in [-3, 0, 3]:
+		b.sym("heavysusp", 2, 0, z, 0, acc)
+		b.sym("offroad", 3, 0, z, 0, "", {"steer": "auto", "drive": true, "pow": 170})
+	b.add("turntable", 0, 1, 1, 0, acc)
+	b.add("servo_h", 0, 2, 1, 0, acc)
+	b.add("beam", 0, 3, 1, 0, col)
+	b.add("piston_t", 0, 4, 1, Blocks.rot_toward(Vector3.UP, Vector3.FORWARD), acc, {"ch": "lift", "inv": false, "pow": 100, "mode": "hold"})
+	b.add("supermagnet", 0, 4, 0, Blocks.rot_toward(Vector3.FORWARD, Vector3.DOWN), "")
+	b.sym("beacon", 1, 1, -2, 0, "")
+	b.sym("light", 1, 1, -3)
+	b.put("ballast", 0, 0, 2, 0, "")
+	return b.done("Mega Crane")
+
+
+## Air suspension on every wheel: Space raises, C slams it down.
+func _lowrider() -> Dictionary:
+	var b := DB.new()
+	var col := "#b98cff"
+	for z in range(-2, 3):
+		for x in range(-1, 2):
+			b.add("cube", x, 0, z, 0, col)
+	b.put("seat", 0, 0, 0)
+	for x in range(-1, 2):
+		b.add("lowwedge", x, 0, -3, 0, col)
+		b.add("chrome", x, 0, 3, 0, "")
+	b.add("canopy", 0, 1, 0, 0, "")
+	b.sym("glass_corner", 1, 1, -1, 0, "")
+	for z in [-2, 2]:
+		b.sym("airsusp", 2, 0, z, 0, "#26c6da")
+		b.sym("classic", 3, 0, z, 0, "")
+	b.add("underglow", 0, -1, 0, 0, "#ff5ec4")
+	b.sym("underglow", 1, -1, -1, 0, "#ff5ec4")
+	b.sym("brakelight", 1, 1, 2)
+	b.add("horn", 0, 1, -2)
+	b.add("spoiler", 0, 1, 2, Blocks.rot_toward(Vector3.FORWARD, Vector3.DOWN), "#2b2f36")
+	return b.done("Bouncy Lowrider")
+
+
+## Skirtless hovercraft: four pads, two ducted fans and a gyro to steer.
+func _hovercraft() -> Dictionary:
+	var b := DB.new()
+	var col := "#26c6da"
+	for z in range(-2, 3):
+		for x in range(-1, 2):
+			b.add("cf_block", x, 0, z, 0, col)
+	b.put("seat", 0, 0, 0)
+	for x in range(-1, 2):
+		b.add("cf_wedge", x, 0, -3, 0, col)
+	for p in [Vector3i(1, -1, -2), Vector3i(1, -1, 2), Vector3i(1, -1, 0)]:
+		b.sym("hover", p.x, p.y, p.z, 0, "#c05cff")
+	b.add("hover", 0, -1, -1, 0, "#c05cff")
+	b.sym("ducted", 1, 1, 2, 0, "#2b2f36")
+	b.add("gyro", 0, -1, 1)
+	b.sym("tailfin", 1, 1, 1, 0, "#2b2f36")
+	b.add("plasmacannon", 0, 1, -2)
+	return b.done("Hover Viper")
+
+
+## Steel submarine: ballast tanks flood on C to dive and blow on Space to surface.
+func _sub() -> Dictionary:
+	var b := DB.new()
+	var col := "#ffcc00"
+	for z in range(-3, 4):
+		for x in range(-1, 2):
+			b.add("cube", x, 0, z, 0, col)
+	b.put("seat", 0, 0, 0)
+	for x in range(-1, 2):
+		b.add("wedge", x, 0, -4, 0, col)
+	b.add("glass", 0, 1, 0)
+	b.add("cyl", 0, 1, 1, 0, col)
+	b.add("beam", 0, 2, 1, 0, "#2b2f36")
+	b.sym("ballast", 2, 0, -2, 0, "")
+	b.sym("ballast", 2, 0, 2, 0, "")
+	b.sym("boatprop", 1, -1, 3)
+	b.add("waterrudder", 0, -1, 3)
+	b.add("keel", 0, -1, -1)
+	b.add("torpedo", 0, -1, -3)
+	b.add("light", 0, 1, -1)
+	return b.done("Yellow Submarine")
+
+
 ## A random but working contraption.
 func random_design() -> Dictionary:
 	var scheme: Array = SCHEMES.pick_random()
@@ -369,9 +485,20 @@ func random_design() -> Dictionary:
 			for gd in ["light", "jump", "smoke", "horn", "parachute", "tnt", "magnet"]:
 				if randf() < 0.35:
 					g.append(gd)
-			return _car({"name": nm, "len": randi_range(4, 7), "hw": randi_range(1, 2), "big": kind == "monster",
+			if randf() < 0.6:
+				g.append(EXTRA_GADGETS.pick_random())
+			var big := kind == "monster"
+			var o := {}
+			if not big:
+				o["wheel"] = CAR_WHEELS.pick_random()
+				if randf() < 0.4:
+					o["susp"] = SUSPENSIONS.pick_random()
+			elif randf() < 0.3:
+				o["wheel"] = "tractor"
+			o.merge({"name": nm, "len": randi_range(4, 7), "hw": randi_range(1, 2), "big": big,
 				"armor": randf() < 0.25, "six": randf() < 0.3, "scheme": scheme, "weapons": wpn, "gadgets": g,
 				"rockets": randi_range(0, 2) if randf() < 0.4 else 0, "spoiler": randf() < 0.4})
+			return _car(o)
 		"plane":
 			var eng: String = ["prop", "prop2", "jet", "jet2", "thruster"].pick_random()
 			return _plane({"name": nm, "engine": eng, "span": randi_range(3, 5), "rows": randi_range(1, 2),
@@ -446,28 +573,66 @@ func stats(d: Dictionary) -> Dictionary:
 		s.mass += def.mass
 		com += Vector3(cell_of(b)) * def.mass
 		s.floats += def.buoy * 9800.0
-		match def.cat:
-			"Weapons":
-				s.weapons += 1
-		if def.has("thrust") and b.id != "rotor":
-			s.thrust += def.thrust
-		if b.id == "rotor":
-			s.lift_max += def.thrust
-		if b.id == "balloon":
-			s.lift_max += def.lift
-		if b.id == "wing":
-			s.wings += 1
-			col += Vector3(cell_of(b))
-		if b.id == "wheel" or b.id == "bigwheel":
-			s.wheels += 1
-		if b.id == "seat":
-			s.has_seat = true
+		if def.cat == "Weapons":
+			s.weapons += 1
+		match def.kind:
+			"engine":
+				if def.get("lift_only", false):
+					s.lift_max += def.thrust
+				else:
+					s.thrust += def.thrust
+			"rotor":
+				s.lift_max += def.thrust
+			"balloon":
+				s.lift_max += def.lift
+			"hover":
+				s.lift_max += def.force
+			"wing":
+				if def.lift > 0.0 and not def.get("water_only", false):
+					s.wings += 1
+					col += Vector3(cell_of(b))
+			"wheel":
+				s.wheels += 1
+			"seat":
+				s.has_seat = true
 	if s.mass > 0:
 		s.com = com / s.mass
 	if s.wings > 0:
 		s.col = col / s.wings
 	s.loose = s.blocks - connected(d.blocks).size()
 	return s
+
+
+## For a piston/hinge/rotator at `cell`: how many blocks it moves, or -1 when
+## the moving side also touches the rest of the vehicle (jammed).
+func mech_status(blocks: Array, cell: Vector3i) -> int:
+	var cells := {}
+	var seat := Vector3i.MAX
+	var me := {}
+	for b in blocks:
+		var c := cell_of(b)
+		cells[c] = b
+		if b.id == "seat":
+			seat = c
+		if c == cell:
+			me = b
+	if me.is_empty():
+		return 0
+	var def: Dictionary = Blocks.defs[me.id]
+	var out: Vector3 = Blocks.rots[int(me.get("r", 0))] * preload("res://scripts/block_models.gd").mech_frame(def).y
+	var start: Vector3i = cell + Vector3i(out.round())
+	if not cells.has(start):
+		return 0
+	var seen := {start: true}
+	var stack := [start]
+	while not stack.is_empty():
+		var c: Vector3i = stack.pop_back()
+		for d in NEIGHBORS:
+			var n: Vector3i = c + d
+			if n != cell and cells.has(n) and not seen.has(n):
+				seen[n] = true
+				stack.append(n)
+	return -1 if seen.has(seat) else seen.size()
 
 
 # ---------------------------------------------------------------- save / load

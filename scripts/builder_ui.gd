@@ -283,6 +283,10 @@ func _right_build() -> void:
 	_right.add_child(tips)
 	if def.auto_rot:
 		_right.add_child(UI.label("Wheels orient themselves.", 13, UI.GOOD))
+	if def.kind in Blocks.MOVERS or def.kind == "susp":
+		var ml := UI.label("The yellow/black striped face is the moving side. Rotate it (R/T/F) to point where you want to push or swing. Anything touching the moving side gets carried, so keep it from touching the rest of the vehicle.", 13, UI.GOOD)
+		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_right.add_child(ml)
 
 
 func _right_paint() -> void:
@@ -347,7 +351,20 @@ func _right_config() -> void:
 	head.add_child(hv)
 	hv.add_child(UI.label(def.name, 18, Blocks.CAT_COLORS[def.cat]))
 	hv.add_child(UI.label("at %d, %d, %d" % [c.x, c.y, c.z], 12, UI.MUTED))
-	if def.cfg.is_empty() and b.id != "flap":
+	if def.kind in Blocks.MOVERS:
+		var n: int = Designs.mech_status(builder.to_design().blocks, c)
+		var msg := "Moves %d block%s attached to its striped face." % [n, "" if n == 1 else "s"]
+		var mc := UI.GOOD
+		if n < 0:
+			msg = "JAMMED: the moving side also touches the rest of the vehicle, so it can't move. Leave a gap around the moving part."
+			mc = UI.BAD
+		elif n == 0:
+			msg = "Nothing attached to its striped face yet."
+			mc = UI.MUTED
+		var ml := UI.label(msg, 13, mc)
+		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_right.add_child(ml)
+	if def.cfg.is_empty() and def.kind != "flap":
 		_right.add_child(UI.label("This block has no settings.\nIt just works.", 14, UI.MUTED))
 		return
 	if def.cfg.has("ch"):
@@ -372,6 +389,8 @@ func _right_config() -> void:
 		var modes := ["auto", "on", "off", "inv"]
 		for m in ["Auto (front wheels)", "Always steer", "No steering", "Reverse steer"]:
 			so.add_item(m)
+		modes.append("tank")
+		so.add_item("Tank (skid steer)")
 		so.selected = modes.find(cfg.get("steer", "auto"))
 		so.item_selected.connect(func(i): builder.set_cfg(c, "steer", modes[i]))
 		_right.add_child(so)
@@ -381,6 +400,16 @@ func _right_config() -> void:
 		dr.button_pressed = cfg.get("drive", true)
 		dr.toggled.connect(func(on): builder.set_cfg(c, "drive", on))
 		_right.add_child(dr)
+	if def.cfg.has("mode"):
+		_right.add_child(UI.label("Movement", 13, UI.MUTED))
+		var mo := OptionButton.new()
+		mo.focus_mode = Control.FOCUS_NONE
+		var modes := ["return", "hold", "osc"]
+		for m in ["Return: follows the key", "Hold: stays where you leave it", "Auto: swings by itself while on"]:
+			mo.add_item(m)
+		mo.selected = maxi(modes.find(cfg.get("mode", def.cfg.mode)), 0)
+		mo.item_selected.connect(func(i): builder.set_cfg(c, "mode", modes[i]))
+		_right.add_child(mo)
 	if def.cfg.has("pow"):
 		var pl := UI.label("Power: %d%%" % cfg.get("pow", 100), 13, UI.MUTED)
 		_right.add_child(pl)
@@ -393,7 +422,7 @@ func _right_config() -> void:
 		s.value_changed.connect(func(v): pl.text = "Power: %d%%" % v)
 		s.drag_ended.connect(func(_ch): builder.set_cfg(c, "pow", int(s.value)))
 		_right.add_child(s)
-	if b.id == "flap":
+	if def.kind == "flap":
 		var fl := UI.label("Flaps steer automatically: put them far from the center of mass. Behind = pitch, out on the wings = roll, upright = yaw.", 13, UI.GOOD)
 		fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_right.add_child(fl)

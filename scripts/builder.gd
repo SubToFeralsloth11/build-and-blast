@@ -242,8 +242,8 @@ func _spawn_node(c: Vector3i) -> void:
 	var vis := Blocks.make_visual(b.id, col)
 	if not def.auto_rot:
 		vis.basis = Blocks.rots[b.r]
-	if b.id == "light":
-		var lamp := vis.get_node_or_null("lamp")
+	for ln in ["lamp", "lamp1", "lamp2"]:
+		var lamp := vis.find_child(ln, true, false)
 		if lamp:
 			lamp.queue_free()
 	body.add_child(vis)
