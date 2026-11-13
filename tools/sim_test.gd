@@ -14,6 +14,8 @@ func run(m: Node, args: PackedStringArray) -> void:
 	await _frames(5)
 	if "--simtest" in args:
 		await _simtest(args)
+	elif "--worldshots" in args:
+		await _world_shots()
 	else:
 		await _shots()
 	get_tree().quit()
@@ -62,6 +64,11 @@ func _simtest(args: PackedStringArray) -> void:
 		r.name = "RANDOM %d %s" % [i, r.name]
 		list.append(r)
 	var fails := 0
+	if "--worldtest" in args:
+		fails += await _world_test()
+		fails += await _missile_test()
+		print("SIMTEST DONE fails=%d" % fails)
+		return
 	for d in list:
 		if only != "" and not d.name.contains(only):
 			continue
@@ -82,12 +89,110 @@ func _simtest(args: PackedStringArray) -> void:
 	fails += await _catalog_test()
 	fails += await _dive_test()
 	fails += _builder_test()
+	fails += await _world_test()
+	fails += await _missile_test()
 	print("SIMTEST DONE fails=%d" % fails)
 
 
 func _check(cond: bool, what: String) -> int:
 	print("%s builder: %s" % ["PASS" if cond else "FAIL", what])
 	return 0 if cond else 1
+
+
+func _wcheck(cond: bool, what: String) -> int:
+	print("%s world: %s" % ["PASS" if cond else "FAIL", what])
+	return 0 if cond else 1
+
+
+## Race track, carrier and test zone: spawn there, stay put, drive, time a lap.
+func _world_test() -> int:
+	var f := 0
+	var w: Node = main.world
+	var buggy: Dictionary = Designs.presets()[0]
+	for loc in ["track", "carrier", "testzone"]:
+		main.builder.load_design(buggy, false)
+		main.start_test(loc)
+		var v: RigidBody3D = main.vehicle
+		Controls.sim = {"always": 1.0}
+		await _frames(90)
+		var info: Dictionary = w.spawn_info(loc)
+		var dy: float = v.com_world().y - info.pos.y
+		f += _wcheck(v.alive and dy > -0.5 and dy < 3.0, "%s spawn rests on the surface (com %.2f m above)" % [loc, dy])
+		Controls.sim = {"throttle": 1.0, "always": 1.0}
+		await _frames(240)
+		var spd := v.linear_velocity.length()
+		var dy2: float = v.com_world().y - info.pos.y
+		f += _wcheck(spd > 8.0 and dy2 > -0.5 and dy2 < 3.0, "%s drives (%.1f m/s, com %.2f m above)" % [loc, spd, dy2])
+		Controls.sim = {"always": 1.0}
+		main.back_to_builder()
+		await _frames(2)
+	# a lap: slide the car along the centre line and check the timing events
+	main.builder.load_design(buggy, false)
+	main.start_test("track")
+	var car: RigidBody3D = main.vehicle
+	var seen := []
+	var rec := func(kind: String, _t: String) -> void: seen.append(kind)
+	Fx.event.connect(rec)
+	var tr: PackedVector3Array = w.track
+	var m := tr.size()
+	var path := range(m - 4, m) + range(0, m) + range(0, 4)
+	for k: int in path:
+		car.global_position = tr[k] + Vector3(0, 1.0, 0)
+		car.linear_velocity = Vector3.ZERO
+		await _frames(1)
+	Fx.event.disconnect(rec)
+	f += _wcheck(seen.count("race_start") == 1 and seen.count("race_sector") == 3 and seen.count("race_lap") == 1 and w.race_best > 0.0,
+		"lap timing %s (track %d samples)" % [seen, m])
+	# cutting the course does not count as a lap
+	seen.clear()
+	Fx.event.connect(rec)
+	for k: int in range(m - 4, m) + range(0, 4) + range(m - 4, m) + range(0, 4):
+		car.global_position = tr[k] + Vector3(0, 1.0, 0)
+		await _frames(1)
+	Fx.event.disconnect(rec)
+	f += _wcheck(not seen.has("race_lap"), "skipping the sectors gives no lap %s" % [seen])
+	main.back_to_builder()
+	await _frames(2)
+	return f
+
+
+## Holding fire on missiles must not pile up particle systems or materials
+## (that stalled the GPU and crashed the game on macOS).
+func _missile_test() -> int:
+	var f := 0
+	var mech: Dictionary = Designs.presets()[17]
+	main.builder.load_design(mech, false)
+	main.start_test("testzone")
+	var v: RigidBody3D = main.vehicle
+	var pm0: int = Fx._pm_cache.size()
+	var dc0: int = Fx._draw_cache.size()
+	var peak := 0
+	var fired := 0
+	var seen := {}
+	for i in 60 * 12:
+		# swing the camera (and so the crosshair aim) around so missiles turn every way
+		main.cam_yaw = i * 0.02
+		main.cam_pitch = -0.2 + sin(i * 0.013) * 0.4
+		Controls.sim = {"always": 1.0, "fire2": 1.0, "fire1": 1.0}
+		await get_tree().physics_frame
+		var n := 0
+		for c in Fx.root.get_children():
+			if c is GPUParticles3D:
+				n += 1
+			elif c.get("kind") == "missile" and not seen.has(c.get_instance_id()):
+				seen[c.get_instance_id()] = true
+				fired += 1
+		peak = maxi(peak, n)
+	Controls.sim = {"always": 1.0}
+	var pm_new: int = Fx._pm_cache.size() - pm0
+	var dc_new: int = Fx._draw_cache.size() - dc0
+	print("MISSILE fired=%d peak_particle_nodes=%d new_process_mats=%d new_draw_meshes=%d alive=%s" % [fired, peak, pm_new, dc_new, v.alive])
+	f += _wcheck(fired >= 6, "missiles were fired (%d)" % fired)
+	f += _wcheck(peak <= Fx.MAX_BURSTS + 40, "particle systems stay bounded (peak %d)" % peak)
+	f += _wcheck(pm_new < 30 and dc_new < 30, "particle materials are reused (%d process, %d draw)" % [pm_new, dc_new])
+	main.back_to_builder()
+	await _frames(2)
+	return f
 
 
 func _builder_test() -> int:
@@ -619,5 +724,44 @@ func _shots() -> void:
 	Controls.sim = {"throttle": 1.0, "boost": 1.0, "always": 1.0}
 	await _frames(300)
 	await _shot("20_speedboat")
+	Controls.sim = {}
+	main.back_to_builder()
+
+
+## Screenshots of the race track, the carrier and the test zone
+## (windowed: `-- --shots --worldshots`).
+func _world_shots() -> void:
+	var p: Array = Designs.presets()
+	await _process_frames(20)
+	await _shot("20b_garage_bar")
+	main.builder.load_design(p[4], false)
+	main.start_test("track")
+	Controls.sim = {"always": 1.0}
+	await _frames(60)
+	await _shot("21_track_start")
+	Controls.sim = {"throttle": 1.0, "always": 1.0}
+	await _frames(240)
+	await _shot("22_track_drive")
+	main.back_to_builder()
+	main.builder.load_design(p[6], false)
+	main.start_test("carrier")
+	Controls.sim = {"always": 1.0}
+	main.cam_dist = 60.0
+	main.cam_pitch = -0.35
+	await _frames(60)
+	await _shot("23_carrier_deck")
+	main.cam_yaw = PI * 0.8
+	main.cam_dist = 80.0
+	await _frames(30)
+	await _shot("24_carrier_side")
+	main.back_to_builder()
+	main.builder.load_design(p[17], false)
+	main.start_test("testzone")
+	Controls.sim = {"always": 1.0}
+	await _frames(60)
+	await _shot("25_test_zone")
+	Controls.sim = {"always": 1.0, "fire2": 1.0}
+	await _frames(90)
+	await _shot("26_test_zone_missiles")
 	Controls.sim = {}
 	main.back_to_builder()

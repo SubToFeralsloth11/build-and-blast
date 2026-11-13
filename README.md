@@ -20,7 +20,7 @@ Open the folder in Godot 4.7 and press Play, or run `godot --path .`
 | M | Toggle mirror building |
 | B / P / C | Build / Paint / Configure tool |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
-| Enter | Test drive at the last location |
+| Enter | Test drive at the place picked under TEST |
 
 In the garage, a yellow marker shows the centre of mass and a blue marker shows the centre of lift. Blocks that are not connected to the seat turn red, and they fall off when you test the vehicle. The bottom bar shows mass, thrust-to-weight, an estimated takeoff speed, lift and whether the vehicle floats.
 
@@ -48,6 +48,19 @@ New blocks snap flush against the face you point at, so they sit right on top of
 | Tab / Esc / F1 | Back to the garage / pause menu / hide the help |
 
 On foot: WASD to walk, Shift to sprint, Space to jump (and to swim up in water), mouse to look, V switches first and third person. While you are out, the vehicle gets no driving input, but toggles you switched on stay on. R puts you back in the seat of a fresh vehicle.
+
+## Places
+
+Pick a place in the **TEST** dropdown at the top right of the garage, then press **Test drive** (or Enter). The pause menu (Esc) teleports between them.
+
+- **Desert:** stunt park with ramps, a loop, crates, explosive barrels, practice targets and enemy turrets on the mesas.
+- **Race Track:** a looped circuit in the dunes south of the stunt park, with curbs, a start/finish gantry, a grandstand and barriers on the outside of the corners. You start just before the line. Crossing it starts the lap clock; a lap counts once you pass all three sectors in order. The HUD shows the running lap time, and the best lap stays in the stats panel.
+- **Sea:** harbor with a pier and launch ramp, open sea, islands and enemy boats.
+- **Carrier:** a stationary aircraft carrier out at sea, 290 m long with an 18 m high flight deck, an angled landing deck, catapult tracks and an island with a turning radar. You spawn on the stern end of the deck facing the bow, so planes can take off, and you can land back on it.
+- **Runway / Sky:** the airfield, or a mid-air start at 230 m.
+- **Test Zone:** a separate 4 km by 4 km flat white floor with a 1 m grid (darker lines every 10 m and 100 m, a red X axis and a blue Z axis through the spawn). Nothing else is there. Drive off the yellow edge and you respawn.
+
+**Screen shake** (pause menu): Off, Low, Normal, Strong or Extreme. The choice is saved.
 
 ## Blocks (247)
 
@@ -101,10 +114,13 @@ There are 20 presets: Starter Buggy, Battle Buggy, Monster Masher, Iron Rhino Ta
 
 ```sh
 # drive every preset + N random builds, crash/TNT tests, mechanism + submarine tests,
-# spawn every block in the catalog and pulse every control, builder tests
+# spawn every block in the catalog and pulse every control, builder tests,
+# race track / carrier / test zone and missile particle tests
 godot --headless --fixed-fps 60 --path . -- --simtest --random=30
+# only the race track / carrier / test zone and missile tests
+godot --headless --fixed-fps 60 --path . -- --simtest --worldtest
 # trace one design frame by frame
 godot --headless --fixed-fps 60 --path . -- --simtest --random=0 --only=Sparrow --verbose
-# windowed screenshots into tools/out/
+# windowed screenshots into tools/out/ (add --worldshots for the new places only)
 godot --path . -- --shots
 ```

@@ -14,6 +14,9 @@ const CAM_NAMES := ["chase", "free orbit", "first person"]
 const SEAT_HEAD := Vector3(0, 0.95, 0.1)      # eye above the seat block, to see over the hood
 const SEAT_HEAD_LOW := Vector3(0, 0.5, 0.1)   # when a block sits on top of the seat
 const ENTER_RANGE := 4.0
+const SETTINGS := "user://settings.cfg"
+## Screen shake options: name and multiplier.
+const SHAKE_LEVELS := [["Off", 0.0], ["Low", 0.4], ["Normal", 1.0], ["Strong", 1.7], ["Extreme", 2.6]]
 
 var env: Environment
 var sun: DirectionalLight3D
@@ -42,6 +45,9 @@ var _shake := 0.0
 var _veh_size := 3.0
 var _last_target := Vector3.ZERO
 var _mouse_idle := 0.0
+var shake_level := 2
+## True while tools/sim_test.gd drives the game; it must keep running unfocused.
+var _harness := false
 
 var score := 0
 var targets := 0
@@ -89,15 +95,18 @@ func _ready() -> void:
 	hud.relocate.connect(_on_menu_relocate)
 	hud.garage.connect(_on_menu_garage)
 	hud.enemies_toggled.connect(_on_enemies)
+	hud.shake_cycled.connect(_cycle_shake)
+	_load_shake()
 	Fx.event.connect(_on_event)
 	Fx.shake.connect(_on_shake)
 	builder.load_design(Designs.presets()[0], false)
-	bui.toast("Welcome! Build from the orange seat, then hit a TEST button.")
+	bui.toast("Welcome! Build from the orange seat, pick a place under TEST and hit Test drive.")
 	back_to_builder()
 	var args := OS.get_cmdline_user_args()
 	if "--simtest" in args or "--shots" in args:
 		var t := SimTest.new()
 		add_child(t)
+		_harness = true
 		t.run(self, args)
 
 
@@ -167,6 +176,7 @@ func start_test(loc: String) -> void:
 		bui.toast("You need a pilot seat!")
 		return
 	location = loc
+	bui.set_test_location(loc)
 	mode = "test"
 	builder.active = false
 	builder.visible = false
@@ -200,8 +210,8 @@ func _spawn_vehicle() -> void:
 		p.y += -low + 0.25
 	vehicle.global_position = p
 	vehicle.linear_velocity = Basis(Vector3.UP, info.yaw) * info.vel
-	vehicle.wrecked.connect(_on_wrecked)
 	world.player = vehicle
+	world.reset_race()
 	Controls.reset_toggles()
 	hud.set_wrecked(false)
 	_air_t = 0.0
@@ -231,6 +241,7 @@ func _on_menu_respawn() -> void:
 
 func _on_menu_relocate(loc: String) -> void:
 	location = loc
+	bui.set_test_location(loc)
 	_set_paused(false)
 	_spawn_vehicle()
 
@@ -363,14 +374,14 @@ func _remove_pilot() -> void:
 
 func _notification(what: int) -> void:
 	# Leaving the window pauses the test drive, so physics and effects stop too.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and mode == "test" and not paused:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and mode == "test" and not paused and not _harness:
 		_set_paused(true)
 
 
 func _unhandled_input(e: InputEvent) -> void:
 	if mode == "build":
 		if e is InputEventKey and e.is_pressed() and not e.is_echo() and (e as InputEventKey).physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
-			start_test(location)
+			start_test(bui.test_location())
 		return
 	if e is InputEventKey and e.is_pressed() and not e.is_echo():
 		match (e as InputEventKey).physical_keycode:
@@ -525,7 +536,12 @@ func _update_stats(delta: float) -> void:
 		return
 	var com: Vector3 = vehicle.com_world() if vehicle.alive else _last_target
 	var speed: float = vehicle.linear_velocity.length() if vehicle.alive else 0.0
+	# ray down so decks, ramps and the race track count as ground, not just the terrain
 	var gh: float = Fx.ground_height(com.x, com.z)
+	var down := PhysicsRayQueryParameters3D.create(com, com - Vector3(0, 400, 0), Fx.L_WORLD)
+	var gh_hit := cam.get_world_3d().direct_space_state.intersect_ray(down)
+	if not gh_hit.is_empty():
+		gh = gh_hit.position.y
 	var surface := maxf(gh, Fx.WATER)
 	var bottom: float = vehicle.com_local.y - vehicle.lowest_point_local()
 	_agl = com.y - surface - bottom
@@ -548,14 +564,19 @@ func _update_stats(delta: float) -> void:
 				hud.toast("Lost to the deep. Respawning...", Color("#3fa9ff"))
 				_spawn_vehicle()
 				return
+		if location == "testzone" and com.y < World.TZ.y - 25.0:
+			hud.toast("Fell off the test zone. Respawning...", Color("#3fa9ff"))
+			_spawn_vehicle()
+			return
 	var rp: Vector3 = world.active_ring_pos()
 	var rd := -1.0
-	if rp != Vector3.INF and (location == "runway" or location == "sky" or com.y > 40.0):
+	if rp != Vector3.INF and (location == "runway" or location == "sky" or (com.y > 40.0 and location != "testzone")):
 		rd = com.distance_to(rp)
 	hud.update({
 		"name": design.get("name", ""), "speed": pilot.velocity.length() if pilot else speed, "alt": com.y, "agl": maxf(_agl, 0.0),
 		"intact": vehicle.intact(), "score": score, "targets": targets, "top_speed": top_speed,
 		"max_alt": max_alt, "best_air": best_air, "best_lap": best_lap, "ring_dist": rd, "ring_idx": world.ring_index,
+		"race": world.race_status(), "best_race": world.race_best,
 	})
 
 
@@ -581,10 +602,37 @@ func _on_event(kind: String, text: String) -> void:
 				best_lap = world.last_lap
 			hud.toast("%s  +500" % text, Color("#3ddc84"))
 			Sfx.play("score", null, 0.0)
+		"race_start":
+			hud.toast(text, Color("#3ddc84"))
+		"race_sector":
+			hud.toast(text, Color("#ffd23f"))
+		"race_lap":
+			score += 300
+			hud.toast("%s  +300" % text, Color("#3ddc84"))
+			Sfx.play("score", null, 0.0)
 
 
 func _on_shake(pos: Vector3, strength: float) -> void:
 	if mode != "test":
 		return
+	var s: float = SHAKE_LEVELS[shake_level][1]
 	var d := cam.global_position.distance_to(pos)
-	_shake = minf(2.0, _shake + strength * clampf(1.0 - d / 140.0, 0.0, 1.0))
+	_shake = minf(2.0 * maxf(s, 1.0), _shake + strength * s * clampf(1.0 - d / 140.0, 0.0, 1.0))
+
+
+func _load_shake() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS) == OK:
+		shake_level = clampi(int(cfg.get_value("view", "shake", 2)), 0, SHAKE_LEVELS.size() - 1)
+	hud.set_shake_label("Screen shake: %s" % SHAKE_LEVELS[shake_level][0])
+
+
+## Steps through the screen shake levels and saves the choice.
+func _cycle_shake() -> void:
+	shake_level = (shake_level + 1) % SHAKE_LEVELS.size()
+	_shake = 0.0
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS)
+	cfg.set_value("view", "shake", shake_level)
+	cfg.save(SETTINGS)
+	hud.set_shake_label("Screen shake: %s" % SHAKE_LEVELS[shake_level][0])

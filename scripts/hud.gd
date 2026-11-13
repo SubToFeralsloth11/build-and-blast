@@ -7,6 +7,7 @@ signal respawn
 signal relocate(loc: String)
 signal garage
 signal enemies_toggled(on: bool)
+signal shake_cycled
 
 const UI := preload("res://scripts/ui_kit.gd")
 
@@ -40,6 +41,7 @@ var _help: PanelContainer
 var _wreck: PanelContainer
 var _pause: PanelContainer
 var _enemy_btn: Button
+var _shake_btn: Button
 var _cross: Crosshair
 var _ring: Label
 var _prompt: Label
@@ -169,8 +171,8 @@ func _build_pause() -> void:
 	_pause.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_pause.offset_left = -200
 	_pause.offset_right = 200
-	_pause.offset_top = -230
-	_pause.offset_bottom = 230
+	_pause.offset_top = -290
+	_pause.offset_bottom = 290
 	add_child(_pause)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
@@ -184,7 +186,8 @@ func _build_pause() -> void:
 	var g := GridContainer.new()
 	g.columns = 2
 	v.add_child(g)
-	for loc in [["desert", "Desert"], ["sea", "Sea"], ["runway", "Runway"], ["sky", "Sky"]]:
+	for loc in [["desert", "Desert"], ["track", "Race Track"], ["sea", "Sea"], ["carrier", "Carrier"],
+			["runway", "Runway"], ["sky", "Sky"], ["testzone", "Test Zone"]]:
 		var b := UI.button(loc[1], func(): relocate.emit(loc[0]))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		g.add_child(b)
@@ -195,6 +198,8 @@ func _build_pause() -> void:
 	var power_btn := UI.button(Power.label(), Power.cycle, "Auto turns it on while unplugged: lower 3D resolution, smaller shadows")
 	Power.changed.connect(func(): power_btn.text = Power.label())
 	v.add_child(power_btn)
+	_shake_btn = UI.button("Screen shake: Normal", func(): shake_cycled.emit(), "How hard explosions and hits shake the camera")
+	v.add_child(_shake_btn)
 	v.add_child(UI.accent_button("Back to garage", func(): garage.emit(), UI.ACCENT))
 	v.add_child(UI.button("Quit game", func(): get_tree().quit()))
 	_pause.visible = false
@@ -260,11 +265,16 @@ func update(d: Dictionary) -> void:
 			tg.append(k.substr(3))
 	_toggles.text = "Toggles on: %s" % ", ".join(tg) if not tg.is_empty() else ""
 	_score.text = "SCORE %d" % d.get("score", 0)
-	_stats.text = "Targets %d\nTop speed %d km/h\nMax altitude %d m\nBest airtime %.1f s\nBest lap %s" % [
+	_stats.text = "Targets %d\nTop speed %d km/h\nMax altitude %d m\nBest airtime %.1f s\nBest ring lap %s\nBest race lap %s" % [
 		d.get("targets", 0), int(d.get("top_speed", 0.0) * 3.6), int(d.get("max_alt", 0.0)),
-		d.get("best_air", 0.0), ("%.1f s" % d.best_lap) if d.get("best_lap", 0.0) > 0.0 else "-"]
+		d.get("best_air", 0.0), ("%.1f s" % d.best_lap) if d.get("best_lap", 0.0) > 0.0 else "-",
+		("%.2f s" % d.best_race) if d.get("best_race", 0.0) > 0.0 else "-"]
 	var rd: float = d.get("ring_dist", -1.0)
-	_ring.text = ("Next ring %d  -  %d m" % [d.get("ring_idx", 0) + 1, int(rd)]) if rd >= 0.0 else ""
+	_ring.text = ("Next ring %d  -  %d m" % [d.get("ring_idx", 0) + 1, int(rd)]) if rd >= 0.0 else d.get("race", "")
+
+
+func set_shake_label(text: String) -> void:
+	_shake_btn.text = text
 
 
 func _process(delta: float) -> void:

@@ -1,12 +1,22 @@
 extends Control
 ## Garage UI: block palette, tools, paint palette, block settings, stats,
-## presets/save/load and the "test drive" buttons.
+## presets/save/load and the test drive location picker.
 
 signal test_requested(loc: String)
 
 const UI := preload("res://scripts/ui_kit.gd")
 const PAINT := ["#f2f2f2", "#9aa4b1", "#59616c", "#2b2f36", "#e53935", "#ff7a2f", "#ffcc00", "#3ddc84",
 	"#1d8a4a", "#3fd6c6", "#3fa9ff", "#1e40af", "#b98cff", "#ff5ec4", "#8d6e63", "#b67a44"]
+## Test drive locations: [id, name, tooltip].
+const TEST_LOCS := [
+	["desert", "Desert", "Stunt park, ramps, loop and targets"],
+	["track", "Race Track", "Looped race track with lap timing"],
+	["sea", "Sea", "Harbor, open sea and islands"],
+	["carrier", "Carrier", "Spawn on the deck of an aircraft carrier"],
+	["runway", "Runway", "Airfield for planes"],
+	["sky", "Sky", "Spawn mid-air at 230 m"],
+	["testzone", "Test Zone", "Huge empty white floor with a grid"],
+]
 
 var builder: Node
 var _cat := "Structure"
@@ -23,6 +33,7 @@ var _toast: Label
 var _toast_t := 0.0
 var _load_menu: MenuButton
 var _preset_menu: MenuButton
+var _loc_pick: OptionButton
 var _presets: Array = []
 
 
@@ -97,10 +108,25 @@ func _build_top() -> void:
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(sp)
 	h.add_child(UI.label("TEST:", 14, UI.MUTED))
-	h.add_child(UI.accent_button("Desert", func(): test_requested.emit("desert"), Color("#e0a050"), "Stunt park, ramps, loop and targets"))
-	h.add_child(UI.accent_button("Sea", func(): test_requested.emit("sea"), Color("#3fa9ff"), "Harbor, open sea and islands"))
-	h.add_child(UI.accent_button("Runway", func(): test_requested.emit("runway"), Color("#9aa4b1"), "Airfield for planes"))
-	h.add_child(UI.accent_button("Sky", func(): test_requested.emit("sky"), Color("#b98cff"), "Spawn mid-air at 230 m"))
+	_loc_pick = OptionButton.new()
+	_loc_pick.focus_mode = Control.FOCUS_NONE
+	_loc_pick.tooltip_text = "Where to test drive"
+	for i in TEST_LOCS.size():
+		_loc_pick.add_item(TEST_LOCS[i][1], i)
+		_loc_pick.set_item_tooltip(i, TEST_LOCS[i][2])
+	h.add_child(_loc_pick)
+	h.add_child(UI.accent_button("Test drive", func(): test_requested.emit(test_location()), UI.GOOD, "Test drive at the chosen place (Enter)"))
+
+
+## Location picked in the TEST dropdown.
+func test_location() -> String:
+	return TEST_LOCS[maxi(_loc_pick.selected, 0)][0]
+
+
+func set_test_location(loc: String) -> void:
+	for i in TEST_LOCS.size():
+		if TEST_LOCS[i][0] == loc:
+			_loc_pick.select(i)
 
 
 func _fill_load_menu() -> void:
