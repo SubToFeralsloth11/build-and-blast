@@ -77,7 +77,6 @@ static func _omni(p: Node3D, nm: String, pos: Vector3, col: Color, energy: float
 
 
 static func build(r: Node3D, def: Dictionary, col: Color) -> bool:
-	var dk := col.darkened(0.35)
 	match def.vis:
 		"solid":
 			_solid(r, def, col)
@@ -113,57 +112,15 @@ static func build(r: Node3D, def: Dictionary, col: Color) -> bool:
 			_box(r, Vector3(0.12, 0.5, 0.12), Vector3(0, 0.1, 0), _m(STEEL, 0.7, 0.3))
 			_box(r, Vector3(0.6, 0.12, 0.4), Vector3(0, 0.38, 0), _m(DARK, 0.3, 0.5))
 		"piston":
-			var f := _frame(r, def)
-			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), Blocks.block_mat(col, 0.3, 0.5))
-			_box(f, Vector3(0.92, 0.08, 0.92), Vector3(0, -0.02, 0), _m(DARK, 0.4, 0.5))
-			_cyl(f, 0.3, 0.3, 0.4, Vector3(0, 0.2, 0), _m(STEEL, 0.7, 0.3), Vector3.ZERO, 16)
-			var rod := Blocks._node(f, "rod", Vector3(0, 0.3, 0))
-			var rr := 0.09 if def.get("stroke", 2.0) > 4.0 else 0.13
-			_cyl(rod, rr, rr, 1.0, Vector3.ZERO, _m(Color("#e8edf2"), 0.95, 0.12))
-			rod.scale = Vector3(1, 0.3, 1)
-			var mv := Blocks._node(f, "mov")
-			_box(mv, Vector3(0.86, 0.1, 0.86), Vector3(0, 0.44, 0), _m(dk, 0.4, 0.5))
-			_stripes(mv, 0.5)
+			_piston(_frame(r, def), def, col)
 		"hinge":
-			var f := _frame(r, def)
-			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), Blocks.block_mat(col, 0.3, 0.5))
-			for x in [-0.37, 0.37]:
-				_box(f, Vector3(0.14, 0.42, 0.5), Vector3(x, 0.22, 0), _m(dk, 0.4, 0.5))
-			_cyl(f, 0.1, 0.1, 0.98, Vector3(0, 0.42, 0), _m(DARK, 0.7, 0.3), RZ, 10)
-			var mv := Blocks._node(f, "mov", Vector3(0, 0.5, 0))
-			_box(mv, Vector3(0.56, 0.24, 0.42), Vector3(0, -0.1, 0), _m(STEEL, 0.6, 0.4))
-			_box(mv, Vector3(0.86, 0.06, 0.86), Vector3(0, -0.03, 0), _m(dk, 0.4, 0.5))
-			_stripes(mv, 0.0)
+			_hinge(_frame(r, def), def, col)
 		"rotator":
-			var f := _frame(r, def)
-			_box(f, Vector3(0.9, 0.55, 0.9), Vector3(0, -0.2, 0), Blocks.block_mat(col, 0.3, 0.5))
-			_cyl(f, 0.32, 0.36, 0.2, Vector3(0, 0.15, 0), _m(DARK, 0.6, 0.4), Vector3.ZERO, 20)
-			var mv := Blocks._node(f, "mov")
-			_cyl(mv, 0.44, 0.44, 0.14, Vector3(0, 0.42, 0), _m(STEEL, 0.7, 0.3), Vector3.ZERO, 24)
-			_box(mv, Vector3(0.12, 0.16, 0.4), Vector3(0, 0.44, -0.22), _m(YEL, 0.2, 0.5))
-			for i in 4:
-				var a := i * TAU / 4.0 + 0.6
-				Blocks._mi(mv, Blocks.sphere_mesh(0.04), Vector3(cos(a) * 0.32, 0.5, sin(a) * 0.32), _m(DARK, 0.6, 0.3))
+			_rotator(_frame(r, def), def, col)
 		"susp":
-			var f := _frame(r, def)
-			_box(f, Vector3(0.8, 0.12, 0.8), Vector3(0, -0.44, 0), Blocks.block_mat(col.darkened(0.2), 0.4, 0.5))
-			_cyl(f, 0.14, 0.14, 0.5, Vector3(0, -0.18, 0), _m(DARK, 0.6, 0.35))
-			var coil := Blocks._node(f, "coil")
-			for i in 5:
-				Blocks._mi(coil, Blocks.torus_mesh(0.2, 0.27), Vector3(0, -0.3 + i * 0.14, 0), _m(col, 0.5, 0.35))
-			var rod := Blocks._node(f, "rod", Vector3(0, 0.1, 0))
-			_cyl(rod, 0.08, 0.08, 1.0, Vector3.ZERO, _m(Color("#e8edf2"), 0.95, 0.12))
-			rod.scale = Vector3(1, 0.6, 1)
-			var mv := Blocks._node(f, "mov")
-			_box(mv, Vector3(0.7, 0.1, 0.7), Vector3(0, 0.42, 0), _m(DARK, 0.4, 0.5))
-			_stripes(mv, 0.475, 0.66)
+			_susp(_frame(r, def), def, col)
 		"decoupler":
-			_box(r, Vector3(0.95, 0.42, 0.95), Vector3(0, -0.25, 0), _m(DARK, 0.4, 0.5))
-			_box(r, Vector3(0.95, 0.42, 0.95), Vector3(0, 0.25, 0), _m(col, 0.3, 0.5))
-			for i in 4:
-				var a := i * TAU / 4.0 + PI / 4.0
-				_cyl(r, 0.06, 0.06, 0.12, Vector3(cos(a) * 0.48, 0, sin(a) * 0.48), _m(Color("#e53935"), 0.4, 0.4), RZ, 8)
-			_box(r, Vector3(1.0, 0.05, 1.0), Vector3(0, 0, 0), _m(Color("#e53935"), 0.3, 0.5))
+			_decoupler(r, col)
 		# ------------------------------------------------ propulsion
 		"ion":
 			var gc := Color(def.get("glow", "#5fd0ff"))
@@ -606,6 +563,467 @@ static func build(r: Node3D, def: Dictionary, col: Color) -> bool:
 		_:
 			return false
 	return true
+
+
+# ---------------------------------------------------------------- mechanical
+# Every mechanical id gets its own silhouette; `col` stays the main tint so
+# painting works. vehicle.gd animates the `mov`, `rod` and `coil` nodes.
+
+const CHROME := Color("#e8edf2")
+const HOSE := Color("#2a2d33")
+const RED := Color("#e53935")
+
+
+## Ring of `n` studs around the local Y axis.
+static func _bolts(p: Node3D, n: int, rad: float, y: float, m: Material, size := 0.04, a0 := 0.0) -> void:
+	for i in n:
+		var a := a0 + i * TAU / n
+		Blocks._mi(p, Blocks.sphere_mesh(size), Vector3(cos(a) * rad, y, sin(a) * rad), m)
+
+
+## Coil spring along Y built from slightly tilted rings (reads as a helix).
+static func _coil(p: Node3D, rad: float, wire: float, y0: float, y1: float, n: int, m: Material, x := 0.0) -> void:
+	for i in n:
+		var y := lerpf(y0, y1, (i + 0.5) / n)
+		Blocks._mi(p, Blocks.torus_mesh(rad - wire, rad + wire), Vector3(x, y, 0), m, Vector3(0.12, 0, 0))
+
+
+## Pistons: `rod` is a unit-height cylinder stretched by vehicle.gd, `mov` the output face.
+static func _piston(f: Node3D, def: Dictionary, col: Color) -> void:
+	var body := Blocks.block_mat(col, 0.3, 0.5)
+	var dkm := _m(col.darkened(0.35), 0.4, 0.5)
+	var steel := _m(STEEL, 0.7, 0.3)
+	var dark := _m(DARK, 0.4, 0.5)
+	var hose := _m(HOSE, 0.1, 0.8)
+	var rod := Blocks._node(f, "rod", Vector3(0, 0.3, 0))
+	var mv := Blocks._node(f, "mov")
+	var rr := 0.13
+	var plate := Vector3(0.86, 0.1, 0.86)
+	match def.id:
+		"piston_s":  # squat drum, short fat rod
+			_box(f, Vector3(0.94, 0.16, 0.94), Vector3(0, -0.42, 0), body)
+			_cyl(f, 0.42, 0.44, 0.4, Vector3(0, -0.14, 0), body, Vector3.ZERO, 24)
+			Blocks._mi(f, Blocks.torus_mesh(0.38, 0.45), Vector3(0, 0.06, 0), dark)
+			_bolts(f, 6, 0.32, 0.08, steel, 0.035)
+			_cyl(f, 0.22, 0.24, 0.1, Vector3(0, 0.1, 0), steel)
+			rr = 0.17
+		"piston_l":  # tall slim barrel with banding and fins
+			_box(f, Vector3(0.9, 0.08, 0.9), Vector3(0, -0.46, 0), body)
+			_cyl(f, 0.22, 0.22, 0.76, Vector3(0, -0.04, 0), body, Vector3.ZERO, 16)
+			for y in [-0.26, 0.0, 0.24]:
+				Blocks._mi(f, Blocks.torus_mesh(0.2, 0.27), Vector3(0, y, 0), steel)
+			for a in 4:
+				var ang := a * PI * 0.5
+				_box(f, Vector3(0.34, 0.3, 0.05), Vector3(cos(ang) * 0.3, -0.27, -sin(ang) * 0.3), dkm, Vector3(0, ang, 0))
+			_cyl(f, 0.15, 0.17, 0.06, Vector3(0, 0.37, 0), dark)
+			rr = 0.09
+			plate = Vector3(0.7, 0.08, 0.7)
+		"piston_t":  # stepped telescopic sleeves
+			_box(f, Vector3(0.9, 0.3, 0.9), Vector3(0, -0.35, 0), body)
+			var rads: Array[float] = [0.4, 0.33, 0.26, 0.2]
+			for i in 4:
+				_cyl(f, rads[i], rads[i], 0.11, Vector3(0, -0.14 + i * 0.11, 0), body if i % 2 == 0 else steel, Vector3.ZERO, 20)
+			var srad: Array[float] = [0.16, 0.125, 0.09]
+			for i in 3:
+				_cyl(rod, srad[i], srad[i], 0.34, Vector3(0, -0.333 + i * 0.333, 0), _m(CHROME, 0.95, 0.12))
+				_cyl(rod, srad[i] + 0.025, srad[i] + 0.025, 0.05, Vector3(0, -0.19 + i * 0.333, 0), dark)
+			rr = 0.05
+			plate = Vector3(0.86, 0.08, 0.86)
+		"piston_q":  # slim barrel wrapped in a red return spring
+			_box(f, Vector3(0.8, 0.1, 0.8), Vector3(0, -0.45, 0), dark)
+			_cyl(f, 0.14, 0.14, 0.66, Vector3(0, -0.08, 0), body)
+			_coil(f, 0.25, 0.025, -0.38, 0.22, 6, _m(RED, 0.5, 0.3))
+			_box(f, Vector3(0.14, 0.18, 0.14), Vector3(0.32, -0.3, 0.0), _m(YEL, 0.2, 0.5))
+			_box(f, Vector3(0.18, 0.04, 0.04), Vector3(0.32, -0.18, 0.0), _m(RED, 0.3, 0.4), Vector3(0, 0, 0.5))
+			rr = 0.07
+			plate = Vector3(0.7, 0.06, 0.7)
+		"ram":  # fat octagonal armored cylinder with hose lines
+			_box(f, Vector3(0.96, 0.2, 0.96), Vector3(0, -0.4, 0), body)
+			_cyl(f, 0.42, 0.42, 0.6, Vector3(0, -0.05, 0), body, Vector3.ZERO, 8)
+			for y in [-0.24, 0.18]:
+				_cyl(f, 0.45, 0.45, 0.07, Vector3(0, y, 0), dark, Vector3.ZERO, 8)
+			for z in [-0.2, 0.2]:
+				_cyl(f, 0.035, 0.035, 0.52, Vector3(0.44, -0.04, z), hose)
+				_cyl(f, 0.05, 0.05, 0.08, Vector3(0.43, 0.22, z), steel, RZ, 8)
+			_cyl(f, 0.3, 0.3, 0.08, Vector3(0, 0.29, 0), steel)
+			rr = 0.19
+			plate = Vector3(0.92, 0.14, 0.92)
+		"hydro":  # tie-rod cylinder with end caps and a hose loop
+			_box(f, Vector3(0.72, 0.12, 0.72), Vector3(0, -0.43, 0), body)
+			_box(f, Vector3(0.72, 0.12, 0.72), Vector3(0, 0.25, 0), body)
+			_cyl(f, 0.29, 0.29, 0.58, Vector3(0, -0.09, 0), steel, Vector3.ZERO, 20)
+			for x in [-0.28, 0.28]:
+				for z in [-0.28, 0.28]:
+					_cyl(f, 0.03, 0.03, 0.84, Vector3(x, -0.09, z), _m(CHROME, 0.9, 0.2), Vector3.ZERO, 8)
+			_cyl(f, 0.05, 0.05, 0.1, Vector3(0.4, 0.25, 0), dark, RZ, 8)
+			_cyl(f, 0.05, 0.05, 0.1, Vector3(0.4, -0.43, 0), dark, RZ, 8)
+			_cyl(f, 0.03, 0.03, 0.68, Vector3(0.46, -0.09, 0), hose)
+			rr = 0.12
+		"kicker":  # air tank + boxy cylinder + punch plate
+			_box(f, Vector3(0.9, 0.08, 0.9), Vector3(0, -0.46, 0), dark)
+			_cyl(f, 0.19, 0.19, 0.56, Vector3(0, -0.23, 0.24), body, RZ, 16)
+			for x in [-0.28, 0.28]:
+				Blocks._mi(f, Blocks.sphere_mesh(0.19), Vector3(x, -0.23, 0.24), body)
+			_box(f, Vector3(0.56, 0.6, 0.42), Vector3(0, -0.12, -0.2), dkm)
+			_cyl(f, 0.09, 0.09, 0.02, Vector3(-0.15, -0.23, 0.44), _m(Color("#f4f6f9"), 0.1, 0.4), RX, 12)
+			_cyl(f, 0.04, 0.04, 0.24, Vector3(0.18, 0.0, 0.24), hose)
+			_box(f, Vector3(0.12, 0.1, 0.12), Vector3(0.18, 0.12, 0.2), _m(RED, 0.3, 0.4))
+			_cyl(mv, 0.3, 0.34, 0.1, Vector3(0, 0.34, 0), _m(RED, 0.4, 0.4), Vector3.ZERO, 20)
+			rr = 0.15
+		"jack":  # scissor arms stretch with the rod, crank screw on the base
+			_box(f, Vector3(0.96, 0.1, 0.96), Vector3(0, -0.45, 0), dark)
+			_box(f, Vector3(0.6, 0.22, 0.6), Vector3(0, -0.3, 0), body)
+			_cyl(f, 0.04, 0.04, 0.96, Vector3(0, -0.3, 0.36), steel, RZ, 8)
+			_box(f, Vector3(0.04, 0.2, 0.04), Vector3(0.47, -0.22, 0.36), dark)
+			for x in [-0.3, 0.3]:
+				for s in [-1.0, 1.0]:
+					_box(rod, Vector3(0.06, 1.16, 0.07), Vector3(x, 0, 0), body, Vector3(s * 0.54, 0, 0))
+			_cyl(rod, 0.035, 0.035, 0.7, Vector3.ZERO, dark, RZ, 8)
+			_box(mv, Vector3(0.6, 0.1, 0.12), Vector3(0, 0.33, 0.28), dkm)
+			_box(mv, Vector3(0.6, 0.1, 0.12), Vector3(0, 0.33, -0.28), dkm)
+			rr = 0.05
+		"pump":  # accordion bellows stretch with the rod
+			_box(f, Vector3(0.9, 0.3, 0.9), Vector3(0, -0.35, 0), body)
+			_cyl(f, 0.07, 0.07, 0.2, Vector3(0.42, -0.32, 0), steel, RZ, 10)
+			_cyl(f, 0.11, 0.11, 0.04, Vector3(0.48, -0.32, 0), dark, RZ, 10)
+			_cyl(f, 0.1, 0.1, 0.16, Vector3(-0.3, -0.12, -0.3), _m(Color("#f4f6f9"), 0.2, 0.4))
+			var fold := _m(col.darkened(0.15), 0.0, 0.85)
+			var rub := _m(RUBBER, 0.0, 0.9)
+			for i in 6:
+				var br := 0.33 if i % 2 == 0 else 0.25
+				_cyl(rod, br, br, 1.0 / 6.0, Vector3(0, -0.5 + (i + 0.5) / 6.0, 0), fold if i % 2 == 0 else rub, Vector3.ZERO, 20)
+			rr = 0.05
+		_:
+			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), body)
+			_box(f, Vector3(0.92, 0.08, 0.92), Vector3(0, -0.02, 0), dark)
+			_cyl(f, 0.3, 0.3, 0.4, Vector3(0, 0.2, 0), steel, Vector3.ZERO, 16)
+	_cyl(rod, rr, rr, 1.0, Vector3.ZERO, _m(CHROME, 0.95, 0.12))
+	rod.scale = Vector3(1, 0.3, 1)
+	_box(mv, plate, Vector3(0, 0.44, 0), dkm)
+	_stripes(mv, 0.5)
+
+
+## Hinges: `mov` pivots about frame X at the top face (0, 0.5, 0).
+static func _hinge(f: Node3D, def: Dictionary, col: Color) -> void:
+	var body := Blocks.block_mat(col, 0.3, 0.5)
+	var dkm := _m(col.darkened(0.35), 0.4, 0.5)
+	var steel := _m(STEEL, 0.6, 0.4)
+	var dark := _m(DARK, 0.6, 0.35)
+	var chrome := _m(CHROME, 0.9, 0.2)
+	var white := _m(Color("#f4f6f9"), 0.1, 0.4)
+	var mv := Blocks._node(f, "mov", Vector3(0, 0.5, 0))
+	match def.id:
+		"servo":  # RC servo: boxy case, mounting tabs, side horn
+			_box(f, Vector3(0.8, 0.6, 0.6), Vector3(0, -0.18, 0), body)
+			_box(f, Vector3(0.98, 0.05, 0.36), Vector3(0, -0.02, 0), dkm)
+			for x in [-0.43, 0.43]:
+				_cyl(f, 0.035, 0.035, 0.06, Vector3(x, -0.02, 0), dark, Vector3.ZERO, 8)
+			_box(f, Vector3(0.5, 0.2, 0.01), Vector3(0, -0.2, 0.3), white)
+			var wire: Array[Color] = [RED, Color("#ff9a1f"), Color("#6d4c41")]
+			for i in 3:
+				_box(f, Vector3(0.04, 0.03, 0.14), Vector3(-0.05 + i * 0.05, -0.4, -0.36), _m(wire[i], 0.1, 0.6))
+			for x in [-0.32, 0.32]:
+				_box(f, Vector3(0.12, 0.42, 0.42), Vector3(x, 0.22, 0), dkm)
+			_cyl(f, 0.09, 0.09, 0.96, Vector3(0, 0.42, 0), dark, RZ, 10)
+			_cyl(mv, 0.1, 0.1, 0.05, Vector3(0.44, -0.08, 0), white, RZ, 12)
+			_box(mv, Vector3(0.04, 0.07, 0.5), Vector3(0.45, -0.08, 0), white)
+			_box(mv, Vector3(0.5, 0.2, 0.4), Vector3(0, -0.12, 0), steel)
+		"servo_w":  # piano hinge: low slab, alternating knuckles
+			_box(f, Vector3(0.96, 0.3, 0.96), Vector3(0, -0.34, 0), body)
+			_box(f, Vector3(0.96, 0.26, 0.06), Vector3(0, 0.2, 0.12), dkm)
+			_cyl(f, 0.03, 0.03, 1.0, Vector3(0, 0.42, 0), chrome, RZ, 8)
+			for i in 5:
+				var p := f if i % 2 == 0 else mv
+				_cyl(p, 0.08, 0.08, 0.18, Vector3(-0.4 + i * 0.2, 0.42 if i % 2 == 0 else -0.08, 0), body if i % 2 == 0 else steel, RZ, 12)
+			for i in 7:
+				_box(f, Vector3(0.02, 0.06, 0.02), Vector3(-0.36 + i * 0.12, -0.17, 0.48), dark)
+		"servo_h":  # bolted armored gearbox with side gear
+			_box(f, Vector3(0.96, 0.6, 0.96), Vector3(0, -0.2, 0), body)
+			for x in [-0.38, 0.38]:
+				for y in [-0.42, 0.02]:
+					for z in [-0.485, 0.485]:
+						_cyl(f, 0.04, 0.04, 0.03, Vector3(x, y, z), steel, RX, 6)
+			for x in [-0.36, 0.36]:
+				_box(f, Vector3(0.22, 0.4, 0.6), Vector3(x, 0.2, 0), dkm)
+			_cyl(f, 0.24, 0.24, 0.04, Vector3(0.49, -0.2, 0), steel, RZ, 16)
+			for i in 8:
+				var a := i * TAU / 8.0
+				_box(f, Vector3(0.04, 0.07, 0.06), Vector3(0.49, -0.2 + sin(a) * 0.26, cos(a) * 0.26), steel, Vector3(PI * 0.5 - a, 0, 0))
+			_cyl(f, 0.13, 0.13, 1.0, Vector3(0, 0.38, 0), dark, RZ, 8)
+			_box(mv, Vector3(0.48, 0.26, 0.6), Vector3(0, -0.12, 0), steel)
+		"servo_f":  # small case with a lightning stripe
+			_box(f, Vector3(0.6, 0.42, 0.5), Vector3(0, -0.28, 0), body)
+			_box(f, Vector3(0.9, 0.05, 0.3), Vector3(0, -0.1, 0), dkm)
+			var bolt := _glow(Color("#fff6a0"), 3.0)
+			_box(f, Vector3(0.05, 0.16, 0.01), Vector3(-0.04, -0.2, 0.255), bolt, Vector3(0, 0, -0.5))
+			_box(f, Vector3(0.12, 0.04, 0.01), Vector3(0.0, -0.28, 0.255), bolt)
+			_box(f, Vector3(0.05, 0.16, 0.01), Vector3(0.04, -0.36, 0.255), bolt, Vector3(0, 0, -0.5))
+			for x in [-0.3, 0.3]:
+				_box(f, Vector3(0.1, 0.36, 0.3), Vector3(x, 0.24, 0), dkm)
+			_cyl(f, 0.06, 0.06, 0.8, Vector3(0, 0.42, 0), dark, RZ, 8)
+			_box(mv, Vector3(0.36, 0.18, 0.3), Vector3(0, -0.1, 0), steel)
+			_box(mv, Vector3(0.04, 0.12, 0.3), Vector3(0.0, -0.1, -0.2), _m(RED, 0.3, 0.4))
+		"steer_hinge":  # steering knuckle: fork, kingpin, tie-rod arm
+			_box(f, Vector3(0.9, 0.3, 0.9), Vector3(0, -0.35, 0), body)
+			for x in [-0.38, 0.38]:
+				_box(f, Vector3(0.14, 0.62, 0.36), Vector3(x, 0.1, 0), body)
+			_cyl(f, 0.09, 0.09, 0.98, Vector3(0, 0.42, 0), dark, RZ, 10)
+			for x in [-0.46, 0.46]:
+				_cyl(f, 0.12, 0.12, 0.04, Vector3(x, 0.42, 0), steel, RZ, 6)
+			_box(mv, Vector3(0.56, 0.3, 0.4), Vector3(0, -0.15, 0.04), steel)
+			_box(mv, Vector3(0.1, 0.1, 0.3), Vector3(0, -0.2, -0.3), dkm)
+			Blocks._mi(mv, Blocks.sphere_mesh(0.07), Vector3(0, -0.2, -0.44), chrome)
+			_cyl(f, 0.04, 0.04, 0.5, Vector3(0.12, 0.06, -0.44), chrome, RZ, 8)
+		"gimbal_p", "gimbal_y", "gimbal_r":
+			var ac: Color = {"gimbal_p": RED, "gimbal_y": Color("#3ddc84"), "gimbal_r": Color("#3f7bff")}[def.id]
+			var am := _m(ac, 0.4, 0.35)
+			_cyl(f, 0.44, 0.46, 0.18, Vector3(0, -0.41, 0), body, Vector3.ZERO, 24)
+			for x in [-0.42, 0.42]:
+				_box(f, Vector3(0.1, 0.78, 0.16), Vector3(x, 0.04, 0), dkm)
+				_cyl(f, 0.06, 0.06, 0.08, Vector3(x * 1.1, 0.42, 0), am, RZ, 10)
+			match def.id:
+				"gimbal_p":  # vertical ring swinging in the YZ plane
+					Blocks._mi(f, Blocks.torus_mesh(0.3, 0.37), Vector3(0, 0.06, 0), body, RZ)
+					_box(mv, Vector3(0.7, 0.08, 0.08), Vector3(0, -0.06, 0), am)
+					Blocks._mi(mv, Blocks.torus_mesh(0.19, 0.24), Vector3(0, -0.28, 0), steel, RZ)
+				"gimbal_y":  # two concentric flat rings on a pin
+					Blocks._mi(f, Blocks.torus_mesh(0.34, 0.41), Vector3(0, -0.14, 0), body)
+					Blocks._mi(f, Blocks.torus_mesh(0.2, 0.26), Vector3(0, -0.14, 0), am)
+					_box(f, Vector3(0.06, 0.06, 0.82), Vector3(0, -0.14, 0), steel)
+					_cyl(mv, 0.14, 0.18, 0.3, Vector3(0, -0.2, 0), steel, Vector3.ZERO, 16)
+				_:  # roll: bearing barrel with twist marks
+					_cyl(f, 0.32, 0.32, 0.36, Vector3(0, -0.12, 0), steel, Vector3.ZERO, 24)
+					Blocks._mi(f, Blocks.torus_mesh(0.31, 0.37), Vector3(0, -0.12, 0), am)
+					for i in 3:
+						var a := i * TAU / 3.0
+						_box(f, Vector3(0.14, 0.04, 0.02), Vector3(cos(a) * 0.33, 0.0, sin(a) * 0.33), am, Vector3(0, -a + PI * 0.5, 0.5))
+					_cyl(mv, 0.26, 0.26, 0.12, Vector3(0, -0.12, 0), dkm, Vector3.ZERO, 20)
+		"gear_hinge":  # landing gear: bracket, folding strut with oleo
+			_box(f, Vector3(0.9, 0.12, 0.9), Vector3(0, -0.44, 0), body)
+			for x in [-0.3, 0.3]:
+				_box(f, Vector3(0.08, 0.74, 0.3), Vector3(x, 0.02, 0), body)
+				_box(f, Vector3(0.06, 0.6, 0.06), Vector3(x, -0.08, 0.2), dkm, Vector3(-0.55, 0, 0))
+			_cyl(f, 0.08, 0.08, 0.76, Vector3(0, 0.42, 0), dark, RZ, 10)
+			_cyl(mv, 0.08, 0.08, 0.5, Vector3(0, -0.16, -0.12), steel, RX, 12)
+			_cyl(mv, 0.055, 0.055, 0.3, Vector3(0, -0.16, -0.32), chrome, RX, 12)
+			_box(mv, Vector3(0.04, 0.12, 0.16), Vector3(0.09, -0.24, -0.28), dkm, Vector3(0.6, 0, 0))
+			_box(mv, Vector3(0.24, 0.06, 0.08), Vector3(0, -0.16, -0.44), dark)
+			_box(mv, Vector3(0.5, 0.14, 0.2), Vector3(0, -0.12, 0.18), dkm)
+		"tilt_hinge":  # pylons carrying a rotating nacelle collar
+			_box(f, Vector3(0.9, 0.12, 0.9), Vector3(0, -0.44, 0), body)
+			for x in [-0.4, 0.4]:
+				_box(f, Vector3(0.16, 0.78, 0.46), Vector3(x, 0.0, 0), body)
+				for i in 3:
+					_box(f, Vector3(0.02, 0.04, 0.1), Vector3(x * 1.2, 0.3 - i * 0.12, 0.15), _m(YEL, 0.2, 0.5))
+			_cyl(mv, 0.22, 0.22, 0.6, Vector3(0, -0.24, 0), steel, RZ, 20)
+			for x in [-0.22, 0.22]:
+				Blocks._mi(mv, Blocks.torus_mesh(0.21, 0.25), Vector3(x, -0.24, 0), _glow(Color("#5fd0ff"), 2.0), RZ)
+			_cyl(mv, 0.1, 0.16, 0.12, Vector3(0, -0.24, 0.24), dkm, RX, 16)
+		"flipper":  # long ribbed paddle on a low wedge
+			_box(f, Vector3(0.9, 0.24, 0.9), Vector3(0, -0.38, 0), body)
+			_box(f, Vector3(0.9, 0.2, 0.5), Vector3(0, -0.2, 0.2), body, Vector3(-0.35, 0, 0))
+			_cyl(f, 0.06, 0.06, 0.48, Vector3(0, -0.04, -0.12), dark, Vector3(0.7, 0, 0), 10)
+			for x in [-0.42, 0.42]:
+				_box(f, Vector3(0.08, 0.5, 0.2), Vector3(x, 0.2, 0), dkm)
+			_cyl(f, 0.08, 0.08, 0.98, Vector3(0, 0.42, 0), dark, RZ, 10)
+			for x in [-0.28, 0.0, 0.28]:
+				_box(mv, Vector3(0.06, 0.12, 0.92), Vector3(x, -0.12, 0), dkm)
+			for z in [-0.46, 0.46]:
+				_box(mv, Vector3(0.9, 0.08, 0.06), Vector3(0, -0.1, z), _m(RED, 0.3, 0.4))
+		"wiggle":  # fishtail: rounded body, spine knuckles, V tail fins
+			_cyl(f, 0.4, 0.44, 0.5, Vector3(0, -0.25, 0), body, Vector3.ZERO, 20)
+			for i in 3:
+				_cyl(f, 0.3 - i * 0.05, 0.3 - i * 0.05, 0.05, Vector3(0, 0.04 + i * 0.09, 0), dkm if i % 2 == 0 else steel, Vector3.ZERO, 16)
+			_cyl(f, 0.07, 0.07, 0.6, Vector3(0, 0.42, 0), dark, RZ, 10)
+			for s in [-1.0, 1.0]:
+				_box(mv, Vector3(0.7, 0.04, 0.4), Vector3(0, -0.14, s * 0.2), body, Vector3(s * 0.5, 0, 0))
+			_cyl(mv, 0.09, 0.09, 0.5, Vector3(0, -0.06, 0), steel, RZ, 10)
+		"sweep":  # radar head: pedestal and a sideways dish with feed spike
+			_cyl(f, 0.44, 0.46, 0.08, Vector3(0, -0.46, 0), dkm, Vector3.ZERO, 24)
+			_cyl(f, 0.24, 0.3, 0.5, Vector3(0, -0.18, 0), body, Vector3.ZERO, 16)
+			for x in [-0.36, 0.36]:
+				_box(f, Vector3(0.1, 0.4, 0.24), Vector3(x, 0.22, 0), dkm)
+			_cyl(f, 0.07, 0.07, 0.8, Vector3(0, 0.42, 0), dark, RZ, 10)
+			var dish := Blocks._mi(mv, Blocks.sphere_mesh(0.22, true), Vector3(0, -0.24, 0.12), chrome, Vector3(-PI * 0.5, 0, 0))
+			dish.scale = Vector3(1, 0.4, 1)
+			_cyl(mv, 0.015, 0.015, 0.24, Vector3(0, -0.24, 0.26), dark, RX, 6)
+			Blocks._mi(mv, Blocks.sphere_mesh(0.035), Vector3(0, -0.24, 0.38), _glow(RED, 3.0))
+		_:
+			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), body)
+			for x in [-0.37, 0.37]:
+				_box(f, Vector3(0.14, 0.42, 0.5), Vector3(x, 0.22, 0), dkm)
+			_cyl(f, 0.1, 0.1, 0.98, Vector3(0, 0.42, 0), dark, RZ, 10)
+			_box(mv, Vector3(0.56, 0.24, 0.42), Vector3(0, -0.1, 0), steel)
+	_box(mv, Vector3(0.86, 0.06, 0.86), Vector3(0, -0.03, 0), dkm)
+	_stripes(mv, 0.0)
+
+
+## Rotators: `mov` spins about frame Y; its top face carries a yellow marker.
+static func _rotator(f: Node3D, def: Dictionary, col: Color) -> void:
+	var body := Blocks.block_mat(col, 0.3, 0.5)
+	var dkm := _m(col.darkened(0.35), 0.5, 0.4)
+	var steel := _m(STEEL, 0.7, 0.3)
+	var dark := _m(DARK, 0.6, 0.4)
+	var yel := _m(YEL, 0.2, 0.5)
+	var mv := Blocks._node(f, "mov")
+	match def.id:
+		"spinner":  # slim post with a small disc
+			_box(f, Vector3(0.9, 0.16, 0.9), Vector3(0, -0.42, 0), body)
+			_cyl(f, 0.16, 0.22, 0.56, Vector3(0, -0.06, 0), dark, Vector3.ZERO, 16)
+			_cyl(mv, 0.3, 0.3, 0.1, Vector3(0, 0.42, 0), steel, Vector3.ZERO, 24)
+			_box(mv, Vector3(0.08, 0.04, 0.24), Vector3(0, 0.48, -0.14), yel)
+			_bolts(mv, 3, 0.18, 0.47, dark, 0.03, 0.6)
+		"turntable":  # wide low ring bearing with a bolt circle
+			_box(f, Vector3(0.96, 0.22, 0.96), Vector3(0, -0.39, 0), body)
+			Blocks._mi(f, Blocks.torus_mesh(0.36, 0.46), Vector3(0, -0.22, 0), dark)
+			_bolts(f, 12, 0.41, -0.16, steel, 0.035)
+			_cyl(mv, 0.48, 0.48, 0.1, Vector3(0, 0.43, 0), steel, Vector3.ZERO, 32)
+			_cyl(mv, 0.38, 0.4, 0.3, Vector3(0, 0.23, 0), dkm, Vector3.ZERO, 24)
+			_bolts(mv, 8, 0.42, 0.48, dark, 0.03)
+			_box(mv, Vector3(0.08, 0.03, 0.34), Vector3(0, 0.49, -0.24), yel)
+		"heavymotor":  # finned motor housing with a terminal box and thick hub
+			_box(f, Vector3(0.9, 0.1, 0.9), Vector3(0, -0.45, 0), dark)
+			_cyl(f, 0.32, 0.32, 0.66, Vector3(0, -0.1, 0), body, Vector3.ZERO, 20)
+			for i in 10:
+				var a := i * TAU / 10.0
+				_box(f, Vector3(0.14, 0.56, 0.05), Vector3(cos(a) * 0.36, -0.12, sin(a) * 0.36), dkm, Vector3(0, -a, 0))
+			_box(f, Vector3(0.18, 0.16, 0.2), Vector3(0, -0.3, 0.4), dark)
+			_cyl(mv, 0.4, 0.4, 0.18, Vector3(0, 0.39, 0), dark, Vector3.ZERO, 8)
+			for i in 4:
+				var a := i * TAU / 4.0 + PI / 4.0
+				_box(mv, Vector3(0.12, 0.04, 0.06), Vector3(cos(a) * 0.26, 0.48, sin(a) * 0.26), steel, Vector3(0, -a, 0))
+			_box(mv, Vector3(0.08, 0.05, 0.3), Vector3(0, 0.49, -0.15), yel)
+		"turbospin":  # glowing stacked rings and a bladed disc
+			var gl := _glow(col.lightened(0.2), 3.5)
+			_box(f, Vector3(0.9, 0.3, 0.9), Vector3(0, -0.35, 0), dark)
+			for i in 3:
+				var rr := 0.42 - i * 0.07
+				Blocks._mi(f, Blocks.torus_mesh(rr - 0.03, rr), Vector3(0, -0.14 + i * 0.12, 0), gl)
+			_cyl(f, 0.14, 0.18, 0.5, Vector3(0, 0.0, 0), steel, Vector3.ZERO, 12)
+			_cyl(mv, 0.42, 0.42, 0.06, Vector3(0, 0.44, 0), body, Vector3.ZERO, 24)
+			Blocks._mi(mv, Blocks.torus_mesh(0.4, 0.46), Vector3(0, 0.44, 0), gl)
+			for i in 3:
+				var a := i * TAU / 3.0
+				_box(mv, Vector3(0.34, 0.04, 0.1), Vector3(cos(a) * 0.2, 0.47, sin(a) * 0.2), dark, Vector3(0.3, -a, 0))
+			_box(mv, Vector3(0.06, 0.04, 0.16), Vector3(0, 0.47, -0.32), yel)
+		_:
+			_box(f, Vector3(0.9, 0.55, 0.9), Vector3(0, -0.2, 0), body)
+			_cyl(f, 0.32, 0.36, 0.2, Vector3(0, 0.15, 0), dark, Vector3.ZERO, 20)
+			_cyl(mv, 0.44, 0.44, 0.14, Vector3(0, 0.42, 0), steel, Vector3.ZERO, 24)
+			_box(mv, Vector3(0.12, 0.16, 0.4), Vector3(0, 0.44, -0.22), yel)
+			_bolts(mv, 4, 0.32, 0.5, dark, 0.04, 0.6)
+
+
+## Suspension: `coil` (static spring), `rod` (unit-height, stretched) and `mov` (output plate).
+static func _susp(f: Node3D, def: Dictionary, col: Color) -> void:
+	var body := Blocks.block_mat(col.darkened(0.2), 0.4, 0.5)
+	var cm := _m(col, 0.5, 0.35)
+	var steel := _m(STEEL, 0.7, 0.3)
+	var dark := _m(DARK, 0.6, 0.35)
+	var rubber := _m(RUBBER, 0.0, 0.9)
+	var coil := Blocks._node(f, "coil")
+	var rod := Blocks._node(f, "rod", Vector3(0, 0.1, 0))
+	var mv := Blocks._node(f, "mov")
+	var rr := 0.08
+	var plate := Vector3(0.7, 0.1, 0.7)
+	match def.id:
+		"spring":  # bare coil between two thin plates
+			_cyl(f, 0.32, 0.32, 0.05, Vector3(0, -0.47, 0), dark, Vector3.ZERO, 20)
+			_coil(coil, 0.28, 0.035, -0.44, 0.36, 7, cm)
+			rr = 0.03
+			plate = Vector3(0.66, 0.06, 0.66)
+		"shock":  # coilover with piggyback reservoir
+			_cyl(f, 0.09, 0.09, 0.12, Vector3(0, -0.4, 0), steel, RZ, 12)
+			_cyl(f, 0.13, 0.13, 0.58, Vector3(0, -0.14, 0), dark, Vector3.ZERO, 16)
+			_cyl(f, 0.25, 0.25, 0.04, Vector3(0, -0.36, 0), steel, Vector3.ZERO, 20)
+			_coil(coil, 0.22, 0.03, -0.32, 0.3, 6, cm)
+			_cyl(f, 0.08, 0.08, 0.46, Vector3(0.36, -0.14, 0), cm, Vector3.ZERO, 12)
+			_cyl(f, 0.085, 0.085, 0.05, Vector3(0.36, 0.1, 0), dark, Vector3.ZERO, 12)
+			_box(f, Vector3(0.24, 0.06, 0.06), Vector3(0.22, -0.34, 0), dark)
+		"heavysusp":  # twin thick coils around a fat damper
+			_box(f, Vector3(0.92, 0.14, 0.92), Vector3(0, -0.43, 0), body)
+			_cyl(f, 0.12, 0.12, 0.5, Vector3(0, -0.14, 0), dark, Vector3.ZERO, 12)
+			for x in [-0.25, 0.25]:
+				_coil(coil, 0.17, 0.05, -0.34, 0.32, 5, cm, x)
+			rr = 0.1
+			plate = Vector3(0.9, 0.14, 0.9)
+		"racesusp":  # short stiff coil with a threaded adjuster collar
+			_box(f, Vector3(0.6, 0.08, 0.6), Vector3(0, -0.46, 0), body)
+			_cyl(f, 0.12, 0.12, 0.4, Vector3(0, -0.24, 0), dark, Vector3.ZERO, 16)
+			_cyl(f, 0.26, 0.26, 0.07, Vector3(0, -0.12, 0), steel, Vector3.ZERO, 20)
+			_cyl(f, 0.25, 0.25, 0.04, Vector3(0, -0.18, 0), dark, Vector3.ZERO, 20)
+			for i in 4:
+				var a := i * TAU / 4.0
+				_box(f, Vector3(0.05, 0.08, 0.06), Vector3(cos(a) * 0.26, -0.12, sin(a) * 0.26), dark, Vector3(0, -a, 0))
+			_coil(coil, 0.22, 0.045, -0.06, 0.3, 4, cm)
+			plate = Vector3(0.6, 0.08, 0.6)
+		"longsusp":  # long thin damper, long slim coil
+			_box(f, Vector3(0.4, 0.06, 0.4), Vector3(0, -0.47, 0), body)
+			_cyl(f, 0.07, 0.07, 0.42, Vector3(0, -0.25, 0), dark, Vector3.ZERO, 12)
+			_coil(coil, 0.17, 0.02, -0.44, 0.38, 10, cm)
+			rr = 0.045
+			plate = Vector3(0.5, 0.06, 0.5)
+		"airsusp":  # rubber bellows bag with an air line
+			_cyl(f, 0.3, 0.3, 0.08, Vector3(0, -0.46, 0), steel, Vector3.ZERO, 20)
+			for y in [-0.24, 0.1]:
+				Blocks._mi(coil, Blocks.sphere_mesh(0.34), Vector3(0, y, 0), rubber).scale = Vector3(1, 0.5, 1)
+			Blocks._mi(coil, Blocks.torus_mesh(0.3, 0.35), Vector3(0, -0.07, 0), cm)
+			_cyl(f, 0.03, 0.03, 0.2, Vector3(0.38, -0.44, 0), _m(col, 0.3, 0.5), RZ, 8)
+			_cyl(f, 0.05, 0.05, 0.06, Vector3(0.26, -0.44, 0), steel, RZ, 8)
+			rr = 0.05
+		"leaf":  # stacked curved leaves, shackles and U-bolts
+			_box(f, Vector3(0.4, 0.08, 0.3), Vector3(0, -0.46, 0), body)
+			for i in 3:
+				var ln := 0.92 - i * 0.24
+				var y := -i * 0.05
+				var lm := _m(col.darkened(i * 0.12), 0.5, 0.4)
+				_box(coil, Vector3(0.24, 0.04, ln * 0.4), Vector3(0, y, 0), lm)
+				var seg := ln * 0.31
+				for s in [-1.0, 1.0]:
+					var zc: float = s * (ln * 0.2 + seg * 0.5 * cos(0.3))
+					_box(coil, Vector3(0.24, 0.04, seg), Vector3(0, y + seg * 0.5 * sin(0.3), zc), lm, Vector3(-s * 0.3, 0, 0))
+			for z in [-0.44, 0.44]:
+				_box(coil, Vector3(0.3, 0.18, 0.05), Vector3(0, 0.16, z), dark)
+			for x in [-0.15, 0.15]:
+				_cyl(f, 0.025, 0.025, 0.42, Vector3(x, -0.24, 0), steel, Vector3.ZERO, 8)
+			_box(f, Vector3(0.36, 0.05, 0.14), Vector3(0, -0.06, 0), steel)
+			rr = 0.05
+			plate = Vector3(0.66, 0.08, 0.66)
+		"pogo":  # one big spring, T-handle on top, rubber foot on the output
+			_cyl(f, 0.18, 0.18, 0.1, Vector3(0, -0.44, 0), steel, Vector3.ZERO, 16)
+			_cyl(f, 0.03, 0.03, 0.94, Vector3(0, -0.45, 0), steel, RZ, 8)
+			for x in [-0.4, 0.4]:
+				_cyl(f, 0.045, 0.045, 0.14, Vector3(x, -0.45, 0), _m(col, 0.1, 0.6), RZ, 10)
+			_coil(coil, 0.34, 0.06, -0.36, 0.3, 4, cm)
+			_cyl(mv, 0.36, 0.38, 0.08, Vector3(0, 0.34, 0), rubber, Vector3.ZERO, 20)
+			rr = 0.06
+			plate = Vector3(0.6, 0.06, 0.6)
+		_:
+			_box(f, Vector3(0.8, 0.12, 0.8), Vector3(0, -0.44, 0), body)
+			_cyl(f, 0.14, 0.14, 0.5, Vector3(0, -0.18, 0), dark)
+			for i in 5:
+				Blocks._mi(coil, Blocks.torus_mesh(0.2, 0.27), Vector3(0, -0.3 + i * 0.14, 0), cm)
+	_cyl(rod, rr, rr, 1.0, Vector3.ZERO, _m(CHROME, 0.95, 0.12))
+	rod.scale = Vector3(1, 0.6, 1)
+	_box(mv, plate, Vector3(0, 0.42, 0), _m(DARK, 0.4, 0.5))
+	_stripes(mv, 0.475, 0.66)
+
+
+## Decoupler: two halves joined by a red seam ring of explosive bolts.
+static func _decoupler(r: Node3D, col: Color) -> void:
+	var det := _glow(RED, 2.5)
+	var steel := _m(STEEL, 0.7, 0.3)
+	_box(r, Vector3(0.95, 0.42, 0.95), Vector3(0, -0.25, 0), _m(DARK, 0.4, 0.5))
+	_box(r, Vector3(0.95, 0.42, 0.95), Vector3(0, 0.25, 0), Blocks.block_mat(col, 0.3, 0.5))
+	_box(r, Vector3(1.0, 0.06, 1.0), Vector3.ZERO, _m(RED, 0.3, 0.5))
+	for i in 8:
+		var a := i * TAU / 8.0
+		var p := Vector3(cos(a), 0, sin(a))
+		p = p / maxf(absf(p.x), absf(p.z)) * 0.45
+		_cyl(r, 0.045, 0.045, 0.34, p, steel, Vector3.ZERO, 6)
+		Blocks._mi(r, Blocks.sphere_mesh(0.05), p + Vector3(0, 0.17, 0), det)
+	Blocks._mi(r, Blocks.torus_mesh(0.3, 0.38), Vector3(0, 0.455, 0), _m(DARK, 0.5, 0.4))
+	_bolts(r, 6, 0.34, 0.46, _m(YEL, 0.3, 0.4), 0.035)
 
 
 # ---------------------------------------------------------------- structure
