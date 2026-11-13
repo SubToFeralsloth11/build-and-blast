@@ -82,6 +82,158 @@ func mirror_index(i: int) -> int:
 	return rot_index(m * rots[i] * m)
 
 
+func mirror_basis(b: Basis) -> Basis:
+	var m := Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1))
+	return snap_basis(m * b * m)
+
+
+## Index of the grid orientation `b` matches, or -1 for a free (e.g. 45 degree) one.
+func grid_index(b: Basis) -> int:
+	for i in rots.size():
+		var r := rots[i]
+		if r.x.distance_to(b.x) < 0.01 and r.y.distance_to(b.y) < 0.01 and r.z.distance_to(b.z) < 0.01:
+			return i
+	return -1
+
+
+## Re-orthonormalises `b` and snaps it exactly onto a grid orientation when close.
+func snap_basis(b: Basis) -> Basis:
+	b = b.orthonormalized()
+	var i := grid_index(b)
+	return rots[i] if i >= 0 else b
+
+
+## The grid orientation nearest to `b`.
+func nearest_grid(b: Basis) -> Basis:
+	var best := 0
+	var bd := -INF
+	for i in rots.size():
+		var r := rots[i]
+		var d := r.x.dot(b.x) + r.y.dot(b.y) + r.z.dot(b.z)
+		if d > bd:
+			bd = d
+			best = i
+	return rots[best]
+
+
+# ---------------------------------------------------------------- design block geometry
+# A design block is {"id", "p": key cell, "r": grid orientation, "c", "cfg"} plus the
+# optional "o" (offset of its centre from p), "s" (size, Structure blocks only) and
+# "q" (quaternion for orientations off the 24-grid, e.g. 45 degrees).
+
+func basis_of(b: Dictionary) -> Basis:
+	var def: Dictionary = defs.get(b.id, {})
+	if def.get("auto_rot", false):
+		return Basis.IDENTITY
+	if b.has("q"):
+		var q: Array = b.q
+		return Basis(Quaternion(float(q[0]), float(q[1]), float(q[2]), float(q[3])).normalized())
+	return rots[clampi(int(b.get("r", 0)), 0, 23)]
+
+
+func set_basis(b: Dictionary, basis: Basis) -> void:
+	basis = snap_basis(basis)
+	var i := grid_index(basis)
+	if i >= 0:
+		b.r = i
+		b.erase("q")
+	else:
+		var q := basis.get_rotation_quaternion()
+		b.r = 0
+		b.q = [snappedf(q.x, 0.00001), snappedf(q.y, 0.00001), snappedf(q.z, 0.00001), snappedf(q.w, 0.00001)]
+
+
+func center_of(b: Dictionary) -> Vector3:
+	var c := Vector3(float(b.p[0]), float(b.p[1]), float(b.p[2]))
+	if b.has("o"):
+		c += Vector3(float(b.o[0]), float(b.o[1]), float(b.o[2]))
+	return c
+
+
+func size_of(b: Dictionary) -> Vector3:
+	if b.has("s") and resizable(b.id):
+		return Vector3(float(b.s[0]), float(b.s[1]), float(b.s[2]))
+	return Vector3.ONE
+
+
+## Plain structure blocks can be resized; seats, mechanisms and devices can't.
+func resizable(id: String) -> bool:
+	return defs.has(id) and defs[id].kind == "struct"
+
+
+func volume_of(b: Dictionary) -> float:
+	var s := size_of(b)
+	return s.x * s.y * s.z
+
+
+## Tight box (block-local, before rotation) used for snapping and overlap tests.
+func local_box(id: String, size := Vector3.ONE) -> AABB:
+	var box := AABB(Vector3(-0.5, -0.5, -0.5), Vector3.ONE)
+	match defs[id].shape if defs.has(id) else "box":
+		"plate": box = AABB(Vector3(-0.5, -0.5, -0.5), Vector3(1, 0.2, 1))
+		"half": box = AABB(Vector3(-0.5, -0.5, -0.5), Vector3(1, 0.5, 1))
+		"beam": box = AABB(Vector3(-0.17, -0.5, -0.17), Vector3(0.34, 1, 0.34))
+	return AABB(box.position * size, box.size * size)
+
+
+## Axis-aligned bounds of a rotated, scaled unit cell: the footprint used for connectivity.
+func cell_box(b: Dictionary) -> AABB:
+	var bs := basis_of(b)
+	var s := size_of(b) * 0.5
+	var h := Vector3(
+		absf(bs.x.x) * s.x + absf(bs.y.x) * s.y + absf(bs.z.x) * s.z,
+		absf(bs.x.y) * s.x + absf(bs.y.y) * s.y + absf(bs.z.y) * s.z,
+		absf(bs.x.z) * s.x + absf(bs.y.z) * s.y + absf(bs.z.z) * s.z)
+	return AABB(center_of(b) - h, h * 2.0)
+
+
+## Blocks share a face (or overlap): connected for building, physics and mechanisms.
+static func boxes_touch(a: AABB, b: AABB) -> bool:
+	var faces := 0
+	for k in 3:
+		var ov := minf(a.end[k], b.end[k]) - maxf(a.position[k], b.position[k])
+		if ov < -0.03:
+			return false
+		if ov > 0.05:
+			faces += 1
+	return faces >= 2
+
+
+## Neighbour lists (indices into `blocks`) of every block whose footprints touch.
+func adjacency(blocks: Array) -> Array:
+	var boxes: Array[AABB] = []
+	var grid := {}
+	var adj := []
+	for i in blocks.size():
+		var bx := cell_box(blocks[i])
+		boxes.append(bx)
+		adj.append([])
+		var lo := Vector3i((bx.position - Vector3.ONE * 0.05).floor())
+		var hi := Vector3i((bx.end + Vector3.ONE * 0.05).floor())
+		for x in range(lo.x, hi.x + 1):
+			for y in range(lo.y, hi.y + 1):
+				for z in range(lo.z, hi.z + 1):
+					var k := Vector3i(x, y, z)
+					if not grid.has(k):
+						grid[k] = []
+					grid[k].append(i)
+	var seen := {}
+	for k in grid:
+		var lst: Array = grid[k]
+		for a in lst.size():
+			for c in range(a + 1, lst.size()):
+				var i: int = lst[a]
+				var j: int = lst[c]
+				var pk := Vector2i(mini(i, j), maxi(i, j))
+				if seen.has(pk):
+					continue
+				seen[pk] = true
+				if boxes_touch(boxes[i], boxes[j]):
+					adj[i].append(j)
+					adj[j].append(i)
+	return adj
+
+
 # ---------------------------------------------------------------- catalog
 
 func _d(id: String, nm: String, cat: String, mass: float, hp: float, col: String, desc: String, extra := {}) -> void:
@@ -453,10 +605,11 @@ func _base_visual(r: Node3D, def: Dictionary, col: Color) -> void:
 			_mi(r, box_mesh(Vector3(0.7, 0.12, 0.6)), Vector3(0, -0.05, 0.05), mat(DARK, 0.1, 0.8))
 			_mi(r, box_mesh(Vector3(0.9, 0.28, 0.18)), Vector3(0, 0.02, -0.41), mat(dk, 0.2, 0.5))
 			_mi(r, torus_mesh(0.1, 0.15), Vector3(0, 0.22, -0.26), mat(DARK, 0.3, 0.5), Vector3(-PI / 3.0, 0, 0))
-			# little robot driver
-			_mi(r, box_mesh(Vector3(0.36, 0.34, 0.24)), Vector3(0, 0.18, 0.18), mat(Color("#e9edf2"), 0.3, 0.4))
-			_mi(r, sphere_mesh(0.19), Vector3(0, 0.5, 0.16), mat(Color("#f4f6f9"), 0.3, 0.3))
-			_mi(r, box_mesh(Vector3(0.3, 0.1, 0.06)), Vector3(0, 0.52, -0.02), glow_mat(Color("#39e1ff"), 2.5))
+			# little robot driver (hidden in first-person view)
+			var drv := _node(r, "driver")
+			_mi(drv, box_mesh(Vector3(0.36, 0.34, 0.24)), Vector3(0, 0.18, 0.18), mat(Color("#e9edf2"), 0.3, 0.4))
+			_mi(drv, sphere_mesh(0.19), Vector3(0, 0.5, 0.16), mat(Color("#f4f6f9"), 0.3, 0.3))
+			_mi(drv, box_mesh(Vector3(0.3, 0.1, 0.06)), Vector3(0, 0.52, -0.02), glow_mat(Color("#39e1ff"), 2.5))
 		"wheel":
 			Models.wheel(r, def, col)
 		"thruster":
@@ -744,6 +897,50 @@ func shape_for(id: String) -> Array:
 				b.size = Vector3.ONE
 				_shapes[kind] = [b, Transform3D.IDENTITY]
 	return _shapes[kind]
+
+
+## Like shape_for, but stretched to `size`. Non-box shapes become convex hulls,
+## since Godot colliders don't take non-uniform scale.
+func shape_scaled(id: String, size: Vector3) -> Array:
+	var base := shape_for(id)
+	if size.is_equal_approx(Vector3.ONE):
+		return base
+	var key := "%s_%.3f_%.3f_%.3f" % [defs[id].shape, size.x, size.y, size.z]
+	if _shapes.has(key):
+		return _shapes[key]
+	var src: Shape3D = base[0]
+	var tr: Transform3D = base[1]
+	var shp: Shape3D
+	if src is BoxShape3D:
+		var b := BoxShape3D.new()
+		b.size = (src as BoxShape3D).size * size
+		shp = b
+	else:
+		var pts := PackedVector3Array()
+		if src is ConvexPolygonShape3D:
+			pts = (src as ConvexPolygonShape3D).points
+		elif src is CylinderShape3D:
+			for i in 16:
+				var a := i * TAU / 16.0
+				pts.append(Vector3(cos(a) * 0.5, -0.5, sin(a) * 0.5))
+				pts.append(Vector3(cos(a) * 0.5, 0.5, sin(a) * 0.5))
+		else:
+			for la in range(-3, 4):
+				var y := sin(la * PI / 8.0) * 0.5
+				var rr := cos(la * PI / 8.0) * 0.5
+				for i in 12:
+					var a := i * TAU / 12.0
+					pts.append(Vector3(cos(a) * rr, y, sin(a) * rr))
+			pts.append(Vector3(0, 0.5, 0))
+			pts.append(Vector3(0, -0.5, 0))
+		var scaled := PackedVector3Array()
+		for p in pts:
+			scaled.append(p * size)
+		var c := ConvexPolygonShape3D.new()
+		c.points = scaled
+		shp = c
+	_shapes[key] = [shp, Transform3D(tr.basis, tr.origin * size)]
+	return _shapes[key]
 
 
 # ---------------------------------------------------------------- icons

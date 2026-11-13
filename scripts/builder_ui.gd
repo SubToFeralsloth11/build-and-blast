@@ -279,7 +279,17 @@ func _right_build() -> void:
 	if def.cfg.has("ch"):
 		_right.add_child(UI.label("Default key: %s" % Controls.label(def.cfg.ch), 14, UI.MUTED))
 	_right.add_child(HSeparator.new())
-	var tips := UI.label("Left click: place\nRight click: delete\nRight drag: orbit   Middle drag: pan\nWheel: zoom   Middle click: pick block\nR / T / F: rotate (Shift = back)\nM: mirror   Ctrl+Z: undo", 13, UI.MUTED)
+	var rh := HBoxContainer.new()
+	rh.add_child(UI.label("Rotate step", 13, UI.MUTED))
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rh.add_child(spacer)
+	rh.add_child(UI.button("%d\u00b0" % int(builder.rot_step), func(): builder.toggle_rot_step(), "Switch R / T / F between 45 and 90 degree turns (G)"))
+	_right.add_child(rh)
+	if Blocks.resizable(builder.block_id):
+		_right.add_child(UI.label("Size  ([ / ] all sides)", 13, UI.MUTED))
+		_right.add_child(_size_row(builder.size, func(v: Vector3): builder.set_size(v)))
+	var tips := UI.label("Left click: place\nRight click: delete\nRight drag: orbit   Middle drag: pan\nWheel: zoom   Middle click: pick block\nR / T / F: rotate (Shift = back)\nG: 45 / 90 degree steps\nBlocks snap flush onto half blocks,\nplates, resized and turned blocks.\nM: mirror   Ctrl+Z: undo", 13, UI.MUTED)
 	_right.add_child(tips)
 	if def.auto_rot:
 		_right.add_child(UI.label("Wheels orient themselves.", 13, UI.GOOD))
@@ -287,6 +297,26 @@ func _right_build() -> void:
 		var ml := UI.label("The yellow/black striped face is the moving side. Rotate it (R/T/F) to point where you want to push or swing. Anything touching the moving side gets carried, so keep it from touching the rest of the vehicle.", 13, UI.GOOD)
 		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_right.add_child(ml)
+
+
+## Three -/+ steppers for a block size; `cb` gets the new size.
+func _size_row(cur: Vector3, cb: Callable) -> Control:
+	var g := GridContainer.new()
+	g.columns = 4
+	g.add_theme_constant_override("h_separation", 6)
+	for a in 3:
+		g.add_child(UI.label(["Width", "Height", "Length"][a], 13, UI.TEXT))
+		var dn := cur
+		dn[a] -= 0.25
+		var up := cur
+		up[a] += 0.25
+		g.add_child(UI.button("-", cb.bind(dn)))
+		var v := UI.label("%.2f" % cur[a], 14, UI.ACCENT)
+		v.custom_minimum_size = Vector2(44, 0)
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		g.add_child(v)
+		g.add_child(UI.button("+", cb.bind(up)))
+	return g
 
 
 func _right_paint() -> void:
@@ -351,6 +381,10 @@ func _right_config() -> void:
 	head.add_child(hv)
 	hv.add_child(UI.label(def.name, 18, Blocks.CAT_COLORS[def.cat]))
 	hv.add_child(UI.label("at %d, %d, %d" % [c.x, c.y, c.z], 12, UI.MUTED))
+	if Blocks.resizable(b.id):
+		_right.add_child(UI.label("Size (also changes mass and armor)", 13, UI.MUTED))
+		_right.add_child(_size_row(Blocks.size_of(b), func(v: Vector3): builder.resize_block(c, v)))
+		_right.add_child(HSeparator.new())
 	if def.kind in Blocks.MOVERS:
 		var n: int = Designs.mech_status(builder.to_design().blocks, c)
 		var msg := "Moves %d block%s attached to its striped face." % [n, "" if n == 1 else "s"]
@@ -365,7 +399,8 @@ func _right_config() -> void:
 		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_right.add_child(ml)
 	if def.cfg.is_empty() and def.kind != "flap":
-		_right.add_child(UI.label("This block has no settings.\nIt just works.", 14, UI.MUTED))
+		if not Blocks.resizable(b.id):
+			_right.add_child(UI.label("This block has no settings.\nIt just works.", 14, UI.MUTED))
 		return
 	if def.cfg.has("ch"):
 		_right.add_child(UI.label("Control", 13, UI.MUTED))

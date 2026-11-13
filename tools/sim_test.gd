@@ -98,8 +98,8 @@ func _builder_test() -> int:
 	f += _check(b.cells.size() == 2, "center block placed once with mirror on")
 	b.place(Vector3i(1, 0, 0))
 	f += _check(b.cells.size() == 4 and b.cells.has(Vector3i(-1, 0, 0)), "mirror places the twin")
-	b.rot = Blocks.rot_toward(Vector3.RIGHT, Vector3.UP)
 	b.set_block("thruster")
+	b.rot_step = 90.0
 	b.rotate_block(Vector3.UP)
 	b.place(Vector3i(2, 0, 0))
 	var r1: int = b.cells[Vector3i(2, 0, 0)].r
@@ -134,6 +134,7 @@ func _builder_test() -> int:
 			cfg_ok = true
 	f += _check(cfg_ok, "save/load keeps key bindings")
 	Designs.delete_design("zz selftest")
+	f += _geometry_test()
 	# drive every UI panel once so script errors surface in the log
 	var ui: Node = main.bui
 	for c in Blocks.CATS:
@@ -159,6 +160,69 @@ func _builder_test() -> int:
 	for p in Designs.presets():
 		loose += Designs.stats(p).loose
 	f += _check(loose == 0, "every preset and 200 random builds are fully connected")
+	return f
+
+
+## Flush placement on half blocks, 45 degree turns, resized blocks, and that a
+## vehicle built from them stays in one piece with the right mass.
+func _geometry_test() -> int:
+	var f := 0
+	var b: Node = main.builder
+	b.load_design(Designs.empty_design())
+	b.mirror = false
+	b.set_block("half")
+	b.place(Vector3i(0, 0, -1))
+	b.set_block("cube")
+	var t: Array = b.target_for(Vector3i(0, 0, -1), Vector3(0.2, 0.0, -1.1), Vector3.UP)
+	f += _check((t[0] as Vector3).is_equal_approx(Vector3(0, 0.5, -1)), "block snaps flush on top of a half block (%s)" % t[0])
+	b.place_at(t[0], t[1])
+	b.set_block("half")
+	b.rot = Blocks.rots[Blocks.rot_toward(Vector3.FORWARD, Vector3.RIGHT)]
+	var ts: Array = b.target_for(Vector3i.ZERO, Vector3(0.5, 0, 0), Vector3.RIGHT)
+	f += _check((ts[0] as Vector3).is_equal_approx(Vector3(1, 0, 0)), "sideways half block sits flush on a side (%s)" % ts[0])
+	b.place_at(ts[0], ts[1])
+	b.set_block("cube")
+	var tw: Array = b.target_for(Vector3i(1, 0, 0), Vector3(1.0, 0.1, 0.1), Vector3.RIGHT)
+	f += _check((tw[0] as Vector3).is_equal_approx(Vector3(1.5, 0, 0)), "block snaps flush onto a sideways half block (%s)" % tw[0])
+	b.place_at(tw[0], tw[1])
+	# 45 degrees, under the seat
+	b.set_block("wedge")
+	b.rot_step = 45.0
+	b.rotate_block(Vector3.UP)
+	f += _check(Blocks.grid_index(b.rot) < 0, "R turns 45 degrees")
+	b.place(Vector3i(0, -1, 0))
+	var tb: Dictionary = b.cells.get(Vector3i(0, -1, 0), {})
+	f += _check(tb.has("q"), "45 degree block stores its free rotation")
+	var bw := Blocks.basis_of(tb)
+	var c45 := Vector3(0, -1, 0)
+	var tn: Array = b.target_for(Vector3i(0, -1, 0), c45 + bw * Vector3(0.5, 0, 0), bw * Vector3.RIGHT)
+	f += _check((tn[0] as Vector3).is_equal_approx(c45 + bw * Vector3.RIGHT) and (tn[1] as Basis).y.is_equal_approx(Vector3.UP)
+		and absf((tn[1] as Basis).x.dot(bw.x)) > 0.99, "blocks attach flush and aligned to a 45 degree block (%s)" % tn[0])
+	# resized blocks
+	b.rot = Basis.IDENTITY
+	b.set_block("cube")
+	b.set_size(Vector3(3, 1, 1))
+	var before: int = b.cells.size()
+	var tr: Array = b.target_for(Vector3i.ZERO, Vector3(0.1, 0, 0.5), Vector3.BACK)
+	b.place_at(tr[0], tr[1])
+	f += _check(b.cells.size() == before + 1 and (tr[0] as Vector3).is_equal_approx(Vector3(0, 0, 1)), "3-wide block placed behind the seat (%s)" % tr[0])
+	var lk := Vector3i(0, 0, 1)
+	f += _check(Blocks.size_of(b.cells.get(lk, {"id": "cube", "p": [0, 0, 1]})).is_equal_approx(Vector3(3, 1, 1)), "placed block keeps its size")
+	b.set_size(Vector3.ONE)
+	var te: Array = b.target_for(lk, Vector3(1.4, 0.2, 1.5), Vector3.BACK)
+	f += _check((te[0] as Vector3).is_equal_approx(Vector3(1, 0, 2)), "small block slides to the end of a long one (%s)" % te[0])
+	b.place_at(te[0], te[1])
+	var d: Dictionary = b.to_design()
+	var st: Dictionary = Designs.stats(d)
+	f += _check(st.loose == 0, "flush, turned and resized blocks all connect (%d loose)" % st.loose)
+	var back: Dictionary = JSON.parse_string(JSON.stringify(d))
+	var v: RigidBody3D = preload("res://scripts/vehicle.gd").new()
+	main.arena.add_child(v)
+	v.build(back)
+	f += _check(v.alive_count == d.blocks.size(), "vehicle keeps every block (%d/%d)" % [v.alive_count, d.blocks.size()])
+	f += _check(absf(v.mass - st.mass) < 0.5, "resized blocks weigh more (vehicle %.0f, garage %.0f)" % [v.mass, st.mass])
+	v.queue_free()
+	b.mirror = true
 	return f
 
 

@@ -536,27 +536,25 @@ func _lift_z(blocks: Array) -> float:
 	return z / maxf(n, 1)
 
 
-## Returns the set of cells connected to the seat.
+## Returns the set of cells (block keys) connected to the seat.
 func connected(blocks: Array) -> Dictionary:
-	var cells := {}
-	var seat := Vector3i.MAX
-	for b in blocks:
-		var c := cell_of(b)
-		cells[c] = b
-		if b.id == "seat":
-			seat = c
 	var seen := {}
-	if seat == Vector3i.MAX:
+	var seat := -1
+	for i in blocks.size():
+		if blocks[i].id == "seat":
+			seat = i
+	if seat < 0:
 		return seen
-	seen[seat] = true
+	var adj := Blocks.adjacency(blocks)
+	var done := {seat: true}
 	var stack := [seat]
 	while not stack.is_empty():
-		var c: Vector3i = stack.pop_back()
-		for d in NEIGHBORS:
-			var n: Vector3i = c + d
-			if cells.has(n) and not seen.has(n):
-				seen[n] = true
-				stack.append(n)
+		var i: int = stack.pop_back()
+		seen[cell_of(blocks[i])] = true
+		for j: int in adj[i]:
+			if not done.has(j):
+				done[j] = true
+				stack.append(j)
 	return seen
 
 
@@ -570,9 +568,11 @@ func stats(d: Dictionary) -> Dictionary:
 		if def.is_empty():
 			continue
 		s.blocks += 1
-		s.mass += def.mass
-		com += Vector3(cell_of(b)) * def.mass
-		s.floats += def.buoy * 9800.0
+		var vol := Blocks.volume_of(b)
+		var ctr := Blocks.center_of(b)
+		s.mass += def.mass * vol
+		com += ctr * def.mass * vol
+		s.floats += def.buoy * vol * 9800.0
 		if def.cat == "Weapons":
 			s.weapons += 1
 		match def.kind:
@@ -590,7 +590,7 @@ func stats(d: Dictionary) -> Dictionary:
 			"wing":
 				if def.lift > 0.0 and not def.get("water_only", false):
 					s.wings += 1
-					col += Vector3(cell_of(b))
+					col += Blocks.center_of(b)
 			"wheel":
 				s.wheels += 1
 			"seat":
@@ -606,32 +606,31 @@ func stats(d: Dictionary) -> Dictionary:
 ## For a piston/hinge/rotator at `cell`: how many blocks it moves, or -1 when
 ## the moving side also touches the rest of the vehicle (jammed).
 func mech_status(blocks: Array, cell: Vector3i) -> int:
-	var cells := {}
-	var seat := Vector3i.MAX
-	var me := {}
-	for b in blocks:
-		var c := cell_of(b)
-		cells[c] = b
-		if b.id == "seat":
-			seat = c
-		if c == cell:
-			me = b
-	if me.is_empty():
+	var seat := -1
+	var me := -1
+	for i in blocks.size():
+		if blocks[i].id == "seat":
+			seat = i
+		if cell_of(blocks[i]) == cell:
+			me = i
+	if me < 0:
 		return 0
-	var def: Dictionary = Blocks.defs[me.id]
-	var out: Vector3 = Blocks.rots[int(me.get("r", 0))] * preload("res://scripts/block_models.gd").mech_frame(def).y
-	var start: Vector3i = cell + Vector3i(out.round())
-	if not cells.has(start):
-		return 0
-	var seen := {start: true}
-	var stack := [start]
+	var mb: Dictionary = blocks[me]
+	var out: Vector3 = Blocks.basis_of(mb) * preload("res://scripts/block_models.gd").mech_frame(Blocks.defs[mb.id]).y
+	var adj := Blocks.adjacency(blocks)
+	var c0 := Blocks.center_of(mb)
+	var seen := {}
+	var stack := []
+	for j: int in adj[me]:
+		if (Blocks.center_of(blocks[j]) - c0).dot(out) > 0.3:
+			seen[j] = true
+			stack.append(j)
 	while not stack.is_empty():
-		var c: Vector3i = stack.pop_back()
-		for d in NEIGHBORS:
-			var n: Vector3i = c + d
-			if n != cell and cells.has(n) and not seen.has(n):
-				seen[n] = true
-				stack.append(n)
+		var i: int = stack.pop_back()
+		for j: int in adj[i]:
+			if j != me and not seen.has(j):
+				seen[j] = true
+				stack.append(j)
 	return -1 if seen.has(seat) else seen.size()
 
 

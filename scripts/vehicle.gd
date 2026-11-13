@@ -8,7 +8,6 @@ extends RigidBody3D
 signal wrecked
 
 const FWD := Vector3(0, 0, -1)
-const NEIGHBORS := [Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1)]
 const WHEEL_VMAX := 46.0
 const WHEEL_VREV := 16.0
 const Models := preload("res://scripts/block_models.gd")
@@ -18,6 +17,7 @@ const NODE_NAMES := ["spin", "flame", "flap", "canopy", "beam", "particles", "la
 var design := {}
 var parts: Array = []
 var by_cell := {}
+var adj: Array = []           # part index -> neighbouring part indices (touching footprints)
 var seat_idx := -1
 var alive := true
 var aim_point := Vector3.INF
@@ -66,6 +66,7 @@ func build(d: Dictionary) -> void:
 	contact_monitor = true
 	max_contacts_reported = 6
 	_rids = [get_rid()]
+	var blist := []
 	for b in d.get("blocks", []):
 		var def := Blocks.get_def(b.id)
 		if def.is_empty():
@@ -73,25 +74,30 @@ func build(d: Dictionary) -> void:
 		var cell := Vector3i(int(b.p[0]), int(b.p[1]), int(b.p[2]))
 		if by_cell.has(cell):
 			continue
-		var basis := Basis.IDENTITY if def.auto_rot else Blocks.rots[clampi(int(b.get("r", 0)), 0, 23)]
+		var basis := Blocks.basis_of(b)
+		var size := Blocks.size_of(b)
+		var vol := size.x * size.y * size.z
 		var cs: String = b.get("c", "")
 		var col: Color = Color(cs) if cs != "" else def.color
 		var cfg: Dictionary = def.cfg.duplicate()
 		cfg.merge(b.get("cfg", {}), true)
-		var pos := Vector3(cell)
+		var pos := Blocks.center_of(b)
 		var vis := Blocks.make_visual(b.id, col)
-		vis.transform = Transform3D(basis, pos)
+		vis.transform = Transform3D(basis * Basis.from_scale(size), pos)
 		add_child(vis)
-		var sh := Blocks.shape_for(b.id)
+		var sh := Blocks.shape_scaled(b.id, size)
 		var col_shape := CollisionShape3D.new()
 		col_shape.shape = sh[0]
 		col_shape.transform = Transform3D(basis, pos) * sh[1]
 		col_shape.set_meta("pi", parts.size())
 		add_child(col_shape)
+		var cb := Blocks.cell_box(b)
 		var p := {
 			"id": b.id, "def": def, "kind": def.kind, "cell": cell, "basis": basis, "pos": pos, "basis0": basis, "pos0": pos,
-			"shape_local": sh[1], "color": col, "cfg": cfg, "hp": float(def.hp), "alive": true, "node": vis, "shape": col_shape,
-			"buoy": float(def.buoy), "gov": -1, "susp": -1,
+			"scale": size, "mass": float(def.mass) * vol, "hy": cb.size.y * 0.5,
+			"shape_local": sh[1], "color": col, "cfg": cfg, "hp": float(def.hp) * maxf(vol, 0.25), "alive": true, "node": vis, "shape": col_shape,
+			"hp_max": float(def.hp) * maxf(vol, 0.25), "idx": parts.size(),
+			"buoy": float(def.buoy) * vol, "gov": -1, "susp": -1,
 			"st": {"cd": randf() * 0.1, "fl": 0.0, "spin": 0.0, "side": 0, "v": 0.0, "ph": 0.0, "ext": 0.0, "h": 0.0,
 				"fuel": float(def.get("fuel", 0.0)), "burn": 0.0, "ammo": int(def.get("mag", 0)), "fill": 0.0},
 		}
@@ -113,6 +119,8 @@ func build(d: Dictionary) -> void:
 			seat_idx = parts.size()
 		by_cell[cell] = parts.size()
 		parts.append(p)
+		blist.append(b)
+	adj = Blocks.adjacency(blist)
 	start_count = parts.size()
 	_setup_mechs()
 	_split_disconnected()
@@ -132,32 +140,31 @@ func _emitter(pos: Vector3, col: Color) -> GPUParticles3D:
 
 # ---------------------------------------------------------------- mechanisms
 
-## Cells reachable from `start` without passing through `block`.
-func _flood_without(start: Vector3i, block: Vector3i) -> Dictionary:
-	var seen := {start: true}
-	var stack := [start]
+## Part indices reachable from `starts` without passing through part `block`.
+func _flood_without(starts: Array, block: int) -> Dictionary:
+	var seen := {}
+	var stack := []
+	for s: int in starts:
+		seen[s] = true
+		stack.append(s)
 	while not stack.is_empty():
-		var c: Vector3i = stack.pop_back()
-		for d in NEIGHBORS:
-			var n: Vector3i = c + d
-			if n == block or seen.has(n) or not by_cell.has(n):
+		var i: int = stack.pop_back()
+		for j: int in adj[i]:
+			if j == block or seen.has(j):
 				continue
-			seen[n] = true
-			stack.append(n)
+			seen[j] = true
+			stack.append(j)
 	return seen
 
 
 func _setup_mechs() -> void:
-	var seat_cell: Vector3i = parts[seat_idx].cell if seat_idx >= 0 else Vector3i.MAX
-	var sets := {}
 	for i in parts.size():
 		var p: Dictionary = parts[i]
 		var kind: String = p.kind
 		if kind == "susp":
-			for d in NEIGHBORS:
-				var n: Vector3i = p.cell + d
-				if by_cell.has(n) and parts[by_cell[n]].kind == "wheel" and parts[by_cell[n]].susp < 0:
-					parts[by_cell[n]].susp = i
+			for j: int in adj[i]:
+				if parts[j].kind == "wheel" and parts[j].susp < 0:
+					parts[j].susp = i
 			continue
 		if not kind in Blocks.MOVERS:
 			continue
@@ -166,19 +173,19 @@ func _setup_mechs() -> void:
 		var axis: Vector3 = p.basis * (fb.x if kind == "hinge" else fb.y)
 		var pivot: Vector3 = p.pos + out * 0.5 if kind == "hinge" else p.pos
 		p["mech"] = {"out": out, "axis": axis, "pivot": pivot, "locked": false, "parent": -1, "W": Transform3D.IDENTITY, "set": []}
-		var child: Vector3i = p.cell + Vector3i(out.round())
 		mechs.append(i)
-		if not by_cell.has(child):
+		# every block touching the striped output face
+		var seeds := []
+		for j: int in adj[i]:
+			if (parts[j].pos - p.pos).dot(out) > 0.3:
+				seeds.append(j)
+		if seeds.is_empty():
 			continue
-		var seen := _flood_without(child, p.cell)
-		if seen.has(seat_cell):
+		var seen := _flood_without(seeds, i)
+		if seen.has(seat_idx):
 			p.mech.locked = true
 			continue
-		var idx: Array = []
-		for c in seen:
-			idx.append(by_cell[c])
-		p.mech.set = idx
-		sets[i] = idx.size()
+		p.mech.set = seen.keys()
 	# outermost (largest moved set) first; parents always come before children
 	mechs.sort_custom(func(a, b): return parts[a].mech.set.size() > parts[b].mech.set.size())
 	for k in mechs:
@@ -263,7 +270,7 @@ func _update_mechs(delta: float) -> void:
 		p.pos = t * p.pos0
 		p.basis = t.basis * p.basis0
 		var tr := Transform3D(p.basis, p.pos)
-		p.node.transform = tr
+		p.node.transform = Transform3D(p.basis * Basis.from_scale(p.scale), p.pos)
 		p.shape.transform = tr * p.shape_local
 	_mech_dirty = 0.15
 
@@ -281,8 +288,8 @@ func _recompute() -> void:
 		if not p.alive:
 			continue
 		alive_count += 1
-		m += p.def.mass
-		c += p.pos * p.def.mass
+		m += p.mass
+		c += p.pos * p.mass
 		match p.kind:
 			"wheel": wheel_count += 1
 			"rotor": rotor_count += 1
@@ -305,7 +312,7 @@ func _recompute() -> void:
 		if not p.alive:
 			continue
 		var r: Vector3 = p.pos - com_local
-		var pm: float = p.def.mass
+		var pm: float = p.mass
 		ix += pm * (r.y * r.y + r.z * r.z + 0.17)
 		iy += pm * (r.x * r.x + r.z * r.z + 0.17)
 		iz += pm * (r.x * r.x + r.y * r.y + 0.17)
@@ -315,9 +322,8 @@ func _recompute() -> void:
 
 
 func _has_wheel(sp: Dictionary) -> bool:
-	for d in NEIGHBORS:
-		var n: Vector3i = sp.cell + d
-		if by_cell.has(n) and parts[by_cell[n]].alive and parts[by_cell[n]].kind == "wheel":
+	for j: int in adj[sp.idx]:
+		if parts[j].alive and parts[j].kind == "wheel":
 			return true
 	return false
 
@@ -971,8 +977,8 @@ func _blinker(p: Dictionary, wp: Vector3, on: bool, delta: float) -> void:
 
 func _repair(amount: float) -> void:
 	for q in parts:
-		if q.alive and q.hp < q.def.hp:
-			q.hp = minf(float(q.def.hp), q.hp + amount)
+		if q.alive and q.hp < q.hp_max:
+			q.hp = minf(q.hp_max, q.hp + amount)
 
 
 func _blink() -> void:
@@ -1350,19 +1356,20 @@ func _split_disconnected() -> void:
 	_recompute()
 
 
+## Cells of the living parts connected to the part at cell `start`.
 func _flood(start: Vector3i) -> Dictionary:
+	var i0: int = by_cell[start]
 	var seen := {start: true}
-	var stack := [start]
+	var done := {i0: true}
+	var stack := [i0]
 	while not stack.is_empty():
-		var c: Vector3i = stack.pop_back()
-		for d in NEIGHBORS:
-			var n: Vector3i = c + d
-			if seen.has(n) or not by_cell.has(n):
+		var i: int = stack.pop_back()
+		for j: int in adj[i]:
+			if done.has(j) or not parts[j].alive:
 				continue
-			if not parts[by_cell[n]].alive:
-				continue
-			seen[n] = true
-			stack.append(n)
+			done[j] = true
+			seen[parts[j].cell] = true
+			stack.append(j)
 	return seen
 
 
@@ -1380,8 +1387,8 @@ func _make_debris(chunk: Array, extra_vel: Vector3) -> void:
 	var c := Vector3.ZERO
 	for p in chunk:
 		p.alive = false
-		m += p.def.mass
-		c += p.pos * p.def.mass
+		m += p.mass
+		c += p.pos * p.mass
 		var node: Node3D = p.node
 		for nm in ["flame", "beam", "canopy", "lamp", "lamp2", "field", "led", "led2"]:
 			if p.has(nm):
@@ -1442,7 +1449,7 @@ func lowest_point_local() -> float:
 	for p in parts:
 		if not p.alive:
 			continue
-		var r := 0.5
+		var r: float = p.hy
 		if p.kind == "wheel":
 			r = p.def.radius + p.def.travel * 0.5
 			if p.susp >= 0:
