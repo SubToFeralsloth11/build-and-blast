@@ -463,6 +463,12 @@ func _right_config() -> void:
 		tk.button_pressed = cfg.get("tank", false)
 		tk.toggled.connect(func(on): builder.set_cfg(c, "tank", on))
 		_right.add_child(tk)
+		var sp := CheckBox.new()
+		sp.text = "Sprint (Shift nearly doubles Auto / Step speed)"
+		sp.focus_mode = Control.FOCUS_NONE
+		sp.button_pressed = cfg.get("sprint", false)
+		sp.toggled.connect(func(on): builder.set_cfg(c, "sprint", on))
+		_right.add_child(sp)
 	if def.cfg.has("pow"):
 		var pl := UI.label("Power: %d%%" % cfg.get("pow", 100), 13, UI.MUTED)
 		_right.add_child(pl)

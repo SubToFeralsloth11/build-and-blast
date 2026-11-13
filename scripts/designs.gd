@@ -72,6 +72,9 @@ func presets() -> Array:
 	out.append(_hovercraft())
 	out.append(_sub())
 	out.append(_spider())
+	out.append(_mech())
+	out.append(_blackbird())
+	out.append(_speedboat())
 	return out
 
 
@@ -468,6 +471,133 @@ func _sub() -> Dictionary:
 	b.add("torpedo", 0, -1, -3)
 	b.add("light", 0, 1, -1)
 	return b.done("Yellow Submarine")
+
+
+## Two-legged battle mech: a tall torso on walker legs with wide sprung feet,
+## two super gyros to balance on one foot, minigun arms and shoulder missiles.
+func _mech() -> Dictionary:
+	var b := DB.new()
+	var armor := "#4a5560"
+	var trim := "#ff9a1f"
+	var turn := Blocks.rot_toward(Vector3.BACK, Vector3.UP)
+	# pelvis and torso, two blocks deep
+	for y in range(0, 4):
+		for x in range(-1, 2):
+			for z in [-1, 0]:
+				b.add("armor" if y >= 2 else "cube", x, y, z, 0, armor)
+	b.put("seat", 0, 2, -1)
+	b.put("supergyro", 0, 1, 0)
+	b.put("supergyro", 0, 0, 0)
+	b.put("glass", 0, 3, -1)
+	b.sym("neon", 1, 1, -1, 0, trim)
+	# head with a visor, searchlight and beacon
+	b.add("armor", 0, 4, 0, 0, armor)
+	b.add("neon", 0, 4, -1, 0, "#39e1ff")
+	b.add("spotlight", 0, 5, -1)
+	b.add("beacon", 0, 5, 0)
+	b.add("cannon", 0, 4, -2, 0, "", {"ch": "fire3", "inv": false, "pow": 100})
+	# shoulders, and arms on Leg Servos that swing opposite the legs like a
+	# person's: the right arm comes forward with the left foot
+	var hang := Blocks.rot_index(Basis(Vector3.DOWN, Vector3.RIGHT, Vector3.BACK))
+	for s in [1, -1]:
+		b.add("armor", 2 * s, 3, 0, 0, trim)
+		b.add("armor", 2 * s, 3, -1, 0, armor)
+		var arm := {"ch": "throttle", "inv": false, "pow": 160, "tank": false, "sprint": true, "mode": "osc", "phase": 90 if s > 0 else 270}
+		b.add("leg_servo", 3 * s, 3, -1, hang, "", arm)
+		b.add("armor", 3 * s, 2, -1, 0, trim)
+		b.add("minigun", 3 * s, 2, -2, 0, "", {"ch": "fire1", "inv": false, "pow": 100})
+		b.add("missile", 2 * s, 4, 0, 0, armor, {"ch": "fire2", "inv": false, "pow": 100})
+	b.add("smoke", 0, 3, 1, 0, armor)
+	# legs: hip swings, lifter raises, foot is three springs in a row
+	for s in [1, -1]:
+		var lift_ph: int = 0 if s > 0 else 180
+		var hip_ph: int = posmod(lift_ph - 90 * s, 360)
+		# a biped can't skid-steer on one planted foot: the gyros turn it on A/D
+		var walk := {"ch": "throttle", "inv": false, "pow": 160, "tank": false}
+		var hip := walk.duplicate()
+		hip.merge({"mode": "osc", "phase": hip_ph})
+		var lift := walk.duplicate()
+		lift.merge({"mode": "step", "phase": lift_ph})
+		b.add("leg_servo", 2 * s, 0, 0, 0 if s > 0 else turn, "", hip)
+		b.add("leg_lift", 3 * s, 0, 0, 0, "", lift)
+		b.add("armor", 3 * s, 1, 0, 0, trim)
+		b.add("armor", 4 * s, 1, 0, 0, armor)
+		b.add("armor", 4 * s, 0, 0, 0, armor)
+		b.add("armor", 4 * s, -1, 0, 0, trim)
+		for z in [-1, 0, 1]:
+			b.add("heavysusp", 4 * s, -2, z, 0, "#2b2f36")
+	return b.done("Titan Mech")
+
+
+## Long black Mach-dash recon jet: chined fuselage, delta wings, two nacelles
+## with afterburners and ramjets, canted fins on the nacelles.
+func _blackbird() -> Dictionary:
+	var b := DB.new()
+	var blk := "#15171a"
+	var dark := "#2b2f36"
+	var along := Blocks.rot_toward(Vector3.UP, Vector3.BACK)     # cylinder lying along Z
+	var spike := Blocks.rot_toward(Vector3.UP, Vector3.FORWARD)  # pyramid tip forward
+	for z in range(-6, 6):
+		b.add("cube", 0, 0, z, 0, blk)
+	b.put("seat", 0, 0, -3)
+	b.add("canopy", 0, 1, -3)
+	b.add("pyramid", 0, 0, -7, spike, blk)
+	for z in range(-6, -1):
+		b.sym("sweptwing", 1, 0, z, 0, blk)
+	for z in range(-1, 4):
+		b.sym("cyl", 2, 0, z, along, blk)
+	b.sym("pyramid", 2, 0, -2, spike, dark)
+	b.sym("afterburner", 2, 0, 4)
+	b.sym("ramjet", 1, 0, 4)
+	b.add("afterburner", 0, 0, 6)
+	for z in range(-1, 4):
+		b.sym("deltawing", 1, 0, z, 0, blk)
+	for z in range(0, 4):
+		b.sym("deltawing", 3, 0, z, 0, blk)
+	for z in range(1, 3):
+		b.sym("deltawing", 4, 0, z, 0, blk)
+	b.sym("flap", 3, 0, 4, 0, dark)
+	b.sym("flap", 4, 0, 3, 0, dark)
+	b.sym("tailfin", 2, 1, 2, 0, blk)
+	b.sym("tailfin", 2, 1, 3, 0, blk)
+	b.add("gyrolite", 0, 1, 0)
+	b.add("wheel", 0, -1, -5, 0, "", {"drive": false, "steer": "auto", "pow": 100})
+	b.sym("wheel", 1, -1, 1, 0, "", {"drive": false, "steer": "off", "pow": 100})
+	b.add("parachute", 0, 1, 4)
+	b.add("smoke", 0, 1, 5, 0, blk)
+	return b.done("Blackbird")
+
+
+## Offshore racer: hull on hydrofoils, three screws and two afterburning jets
+## on the transom for silly top speed.
+func _speedboat() -> Dictionary:
+	var b := DB.new()
+	var col := "#e53935"
+	var wht := "#f2f2f2"
+	for z in range(-3, 5):
+		for x in range(-1, 2):
+			b.add("hull", x, 0, z, 0, col if x == 0 else wht)
+	for x in range(-1, 2):
+		b.add("hullwedge", x, 0, -4, 0, col if x == 0 else wht)
+	b.add("seat", 0, 1, 1)
+	b.add("glass_wedge", 0, 1, 0)
+	b.sym("wedge", 1, 1, 0, 0, wht)
+	b.sym("plate", 1, 1, 1, 0, col)
+	b.sym("hydrofoil", 1, -1, -2)
+	b.sym("hydrofoil", 1, -1, 3)
+	b.sym("bigboatprop", 1, -1, 4)
+	b.add("boatprop", 0, -1, 4)
+	# rudder hangs below the foils so it still bites when the hull lifts out
+	b.add("keel", 0, -1, 3)
+	b.add("waterrudder", 0, -2, 3)
+	b.add("gyro", 0, 1, 2)
+	b.add("keel", 0, -1, -1)
+	b.sym("afterburner", 1, 1, 4)
+	b.add("spoiler", 0, 1, 4, Blocks.rot_toward(Vector3.FORWARD, Vector3.DOWN), "#2b2f36")
+	b.add("flag", 0, 2, 4)
+	b.sym("light", 1, 1, -3)
+	b.add("horn", 0, 1, -1)
+	return b.done("Riptide Speedboat")
 
 
 ## Eight-legged walking robot. Each leg is a Leg Servo hip (swings it fore and

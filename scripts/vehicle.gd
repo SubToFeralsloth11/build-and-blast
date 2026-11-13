@@ -221,7 +221,7 @@ func _mech_target(p: Dictionary, input: float, delta: float) -> bool:
 	var spd: float = def.speed * pw
 	if p.kind != "rotator" and (mode == "osc" or mode == "step"):
 		# the cycle runs forward on a positive input and backward on a negative one
-		st.ph += delta * spd * clampf(input, -1.0, 1.0)
+		st.ph += delta * spd * clampf(input, -2.0, 2.0)
 		st.v = _wave(p, mode)
 		return absf(st.v - old) > 0.00001
 	match p.kind:
@@ -257,6 +257,9 @@ func _update_mechs(delta: float) -> void:
 				var dx: float = p.pos0.x - com_local.x
 				var side := signf(dx) if absf(dx) > 0.1 else 0.0
 				input = clampf(input - Controls.value("steer") * side, -1.0, 1.0)
+			if p.cfg.get("sprint", false):
+				# Shift nearly doubles the cadence: walk becomes run
+				input *= 1.0 + 0.9 * Controls.value("boost")
 			if _mech_target(p, input, delta):
 				moved = true
 		var v: float = p.st.v
@@ -826,7 +829,7 @@ func _susp(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physics
 			var load := clampf(k * comp + c * v.dot(out), 0.0, mass * 40.0)
 			apply_force(-out * load, h.position - global_position)
 			var vl := v - out * v.dot(out)
-			var f := -vl * share / delta * 0.2
+			var f := -vl * share / delta * 0.5
 			if f.length() > load * 0.9:
 				f = f.normalized() * load * 0.9
 			apply_force(f, h.position - global_position)

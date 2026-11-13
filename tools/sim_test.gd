@@ -39,7 +39,7 @@ func _kind(d: Dictionary) -> String:
 				return "boat"
 			"balloon":
 				return "barge"
-			"wing":
+			"wing", "deltawing", "sweptwing":
 				wings += 1
 	return "plane" if wings >= 6 else "car"
 
@@ -311,17 +311,29 @@ func _sim(d: Dictionary) -> Dictionary:
 			var walked: float = (v.com_world() - p0).dot(fwd0)
 			var spd := Vector2(v.linear_velocity.x, v.linear_velocity.z).length()
 			var up_walk := _up(v)
+			# sprint (Shift) on designs where Shift isn't a rocket pounce
+			var run_spd := -1.0
+			if not d.blocks.any(func(bb): return bb.id == "rocket"):
+				Controls.sim = {"throttle": 1.0, "boost": 1.0}
+				await _frames(120)
+				var pr: Vector3 = v.com_world()
+				await _frames(180)
+				run_spd = Vector2(v.com_world().x - pr.x, v.com_world().z - pr.z).length() / 3.0
+				up_walk = minf(up_walk, _up(v))
 			var yaw0: Vector3 = -v.global_basis.z
 			Controls.sim = {"steer": -1.0}
-			await _frames(240)
-			var yaw1: Vector3 = -v.global_basis.z
-			var turned := rad_to_deg(atan2(yaw0.cross(yaw1).y, yaw0.dot(yaw1)))
+			var turned := 0.0
+			for k in 240:
+				await _frames(1)
+				var yaw1: Vector3 = -v.global_basis.z
+				turned += rad_to_deg(atan2(yaw0.cross(yaw1).y, yaw0.dot(yaw1)))
+				yaw0 = yaw1
 			var p1: Vector3 = v.com_world()
 			Controls.sim = {"throttle": -1.0}
 			await _frames(300)
 			var back: float = -(v.com_world() - p1).dot(-v.global_basis.z)
-			msg = "walk10s=%.1f spd=%.1f turnL4s=%.0fdeg back5s=%.1f up=%.2f/%.2f" % [walked, spd, turned, back, up_walk, _up(v)]
-			ok = walked > 10.0 and turned > 30.0 and back > 4.0 and up_walk > 0.85 and _up(v) > 0.85
+			msg = "walk10s=%.1f spd=%.1f run=%.1f turnL4s=%.0fdeg back5s=%.1f up=%.2f/%.2f" % [walked, spd, run_spd, turned, back, up_walk, _up(v)]
+			ok = walked > 10.0 and turned > 30.0 and back > 4.0 and up_walk > 0.85 and _up(v) > 0.85 and (run_spd < 0.0 or run_spd > walked / 10.0 * 1.3)
 	# fire every weapon for a second
 	Controls.sim = {"fire1": 1.0, "fire2": 1.0, "fire3": 1.0, "always": 1.0}
 	await _frames(60)
@@ -585,5 +597,27 @@ func _shots() -> void:
 	Controls.sim = {"boost": 1.0, "always": 1.0}
 	await _frames(70)
 	await _shot("16_spider_pounce")
+	Controls.sim = {}
+	main.back_to_builder()
+	main.builder.load_design(p[17], false)
+	main.start_test("desert")
+	Controls.sim = {"throttle": 1.0, "always": 1.0}
+	await _frames(150)
+	await _shot("17_mech_walk")
+	Controls.sim = {"throttle": 1.0, "boost": 1.0, "always": 1.0}
+	await _frames(100)
+	await _shot("18_mech_sprint")
+	main.back_to_builder()
+	main.builder.load_design(p[18], false)
+	main.start_test("sky")
+	Controls.sim = {"throttle": 1.0, "boost": 1.0, "always": 1.0}
+	await _frames(120)
+	await _shot("19_blackbird")
+	main.back_to_builder()
+	main.builder.load_design(p[19], false)
+	main.start_test("sea")
+	Controls.sim = {"throttle": 1.0, "boost": 1.0, "always": 1.0}
+	await _frames(300)
+	await _shot("20_speedboat")
 	Controls.sim = {}
 	main.back_to_builder()
