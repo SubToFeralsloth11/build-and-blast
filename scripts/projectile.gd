@@ -13,6 +13,7 @@ var _smoke_t := 0.0
 var _bounces := 0
 var _landed := false
 var _fuse := INF
+var _trail_em: GPUParticles3D = null
 
 
 func _ready() -> void:
@@ -87,7 +88,7 @@ func _physics_process(delta: float) -> void:
 		if kind in ["rocket", "missile", "grenade", "bomblet", "flak"]:
 			_impact(global_position, {})
 		else:
-			queue_free()
+			_remove()
 		return
 	if _age > _fuse:
 		_impact(global_position, {})
@@ -106,7 +107,7 @@ func _physics_process(delta: float) -> void:
 					var v := vel + Vector3(randf_range(-1, 1), randf_range(-0.3, 0.6), randf_range(-1, 1)) * 9.0
 					Fx.spawn_projectile("bomblet", global_position, v, exclude)
 				Sfx.play("pop", global_position, 0.0, 0.6)
-				queue_free()
+				_remove()
 				return
 		"rocket", "missile":
 			var acc := 70.0 if kind == "rocket" else 45.0
@@ -153,7 +154,7 @@ func _physics_process(delta: float) -> void:
 			_land()
 			return
 		if kind == "flare":
-			queue_free()
+			_remove()
 			return
 		_impact(h.position, h)
 		return
@@ -171,7 +172,7 @@ func _physics_process(delta: float) -> void:
 				return
 			_:
 				Fx.explode(Vector3(to.x, Fx.WATER, to.z), 2.5 * sqrt(power), 25.0 * power, false)
-				queue_free()
+				_remove()
 				return
 	global_position = to
 	if vel.length() > 0.5:
@@ -179,11 +180,18 @@ func _physics_process(delta: float) -> void:
 		global_basis = Basis.looking_at(vel.normalized(), up)
 
 
+## Smoke behind the projectile: one continuous emitter, `2 / every` puffs a second.
 func _trail(dir: Vector3, every: float, size: float, col := Color(0.85, 0.85, 0.85, 0.6), add := false) -> void:
-	_smoke_t -= get_physics_process_delta_time()
-	if _smoke_t <= 0.0:
-		_smoke_t = every
-		Fx.burst(global_position, col, 2, 0.6, size, 1.2, Vector3(0, 0.6, 0), 30.0, dir, add)
+	if _trail_em == null:
+		_trail_em = Fx.trail(self, col, 2.0 / every, size, 1.2, add)
+	_trail_em.global_basis = Fx.basis_up(dir)
+
+
+func _remove() -> void:
+	if _trail_em:
+		Fx.drop_trail(_trail_em)
+		_trail_em = null
+	queue_free()
 
 
 func _land() -> void:
@@ -247,4 +255,4 @@ func _impact(p: Vector3, h: Dictionary) -> void:
 				c.take_hit(28.0, p, h.shape, vel.normalized())
 			Fx.burst(p, Color("#c05cff"), 14, 6.0, 0.15, 0.4, Vector3.ZERO, 180.0, Vector3.UP, true)
 			Sfx.play("hit", p, -2.0, 0.7)
-	queue_free()
+	_remove()

@@ -18,6 +18,11 @@ var root: Node3D          # 3D node effects get parented to
 var world: Node           # provides height_at(x, z)
 var _pm_cache := {}
 var _draw_cache := {}
+## One-shot particle bursts currently alive. Every burst is its own GPU particle
+## system, so this is capped: hundreds of them at once stall the GPU (Metal
+## "timeout waiting for fence") and crash the game.
+var _live := 0
+const MAX_BURSTS := 220
 
 
 func space() -> PhysicsDirectSpaceState3D:
@@ -183,7 +188,7 @@ func muzzle_flash(pos: Vector3, dir: Vector3, size := 1.0) -> void:
 
 
 func burst(pos: Vector3, col: Color, amount: int, speed: float, size: float, life: float, grav: Vector3, spread: float, dir: Vector3, additive: bool, cubes := false) -> void:
-	if root == null or amount <= 0:
+	if root == null or amount <= 0 or _live >= MAX_BURSTS:
 		return
 	var p := GPUParticles3D.new()
 	p.one_shot = true
@@ -191,57 +196,108 @@ func burst(pos: Vector3, col: Color, amount: int, speed: float, size: float, lif
 	p.amount = amount
 	p.lifetime = life
 	p.local_coords = false
-	var key := "%.1f_%.2f_%s_%.0f_%s_%s" % [speed, life, grav, spread, dir.snapped(Vector3.ONE * 0.1), additive]
-	if not _pm_cache.has(key):
-		var pm := ParticleProcessMaterial.new()
-		pm.direction = dir if dir.length() > 0.01 else Vector3.UP
-		pm.spread = spread
-		pm.initial_velocity_min = speed * 0.4
-		pm.initial_velocity_max = speed
-		pm.gravity = grav
-		pm.damping_min = 0.5
-		pm.damping_max = 2.0
-		pm.angular_velocity_min = -300.0
-		pm.angular_velocity_max = 300.0
-		var curve := CurveTexture.new()
-		var c := Curve.new()
-		c.add_point(Vector2(0, 1.0))
-		c.add_point(Vector2(1, 0.15 if additive else 1.6))
-		curve.curve = c
-		pm.scale_curve = curve
-		var ramp := GradientTexture1D.new()
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
-		g.set_color(1, Color(1, 1, 1, 0))
-		ramp.gradient = g
-		pm.color_ramp = ramp
-		_pm_cache[key] = pm
-	p.process_material = _pm_cache[key]
-	var dkey := "%s_%.2f_%s_%s" % [col.to_html(), size, additive, cubes]
-	if not _draw_cache.has(dkey):
-		var mesh: PrimitiveMesh
-		if cubes:
-			var bm := BoxMesh.new()
-			bm.size = Vector3.ONE * size
-			mesh = bm
-			var m := StandardMaterial3D.new()
-			m.vertex_color_use_as_albedo = true
-			m.albedo_color = col
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mesh.material = m
-		else:
-			var q := Blocks.puff_mesh(size * 1.4, additive).duplicate() as QuadMesh
-			var m := (q.material as StandardMaterial3D).duplicate() as StandardMaterial3D
-			m.albedo_color = col
-			q.material = m
-			mesh = q
-		_draw_cache[dkey] = mesh
-	p.draw_pass_1 = _draw_cache[dkey]
+	p.process_material = _process_mat(speed, life, grav, spread, additive)
+	p.draw_pass_1 = _draw_pass(col, size, additive, cubes)
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(p)
-	p.global_position = pos
+	# The material always emits along +Y; the node's rotation aims it.
+	p.global_transform = Transform3D(basis_up(dir), pos)
 	p.emitting = true
-	get_tree().create_timer(life + 0.4).timeout.connect(p.queue_free)
+	_live += 1
+	get_tree().create_timer(life + 0.4).timeout.connect(_burst_done.bind(p))
+
+
+func _burst_done(p: Node) -> void:
+	_live -= 1
+	p.queue_free()
+
+
+## Continuous smoke trail that follows `parent` (rockets, missiles, torpedoes).
+## One emitter per projectile instead of a new particle system every few frames.
+func trail(parent: Node3D, col: Color, rate: float, size: float, life: float, additive := false) -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.amount = maxi(4, ceili(rate * life))
+	p.lifetime = life
+	p.local_coords = false
+	p.process_material = _process_mat(0.6, life, Vector3(0, 0.6, 0), 30.0, additive)
+	p.draw_pass_1 = _draw_pass(col, size, additive, false)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(p)
+	p.emitting = true
+	return p
+
+
+## Leaves a trail behind in the world when its projectile is removed, so the
+## smoke already emitted fades out instead of vanishing.
+func drop_trail(p: GPUParticles3D) -> void:
+	if p == null or not is_instance_valid(p) or root == null:
+		return
+	p.emitting = false
+	p.reparent(root)
+	get_tree().create_timer(p.lifetime + 0.2).timeout.connect(p.queue_free)
+
+
+## Basis whose +Y axis points along `dir`.
+func basis_up(dir: Vector3) -> Basis:
+	if dir.length_squared() < 0.0001:
+		return Basis.IDENTITY
+	return Basis(Quaternion(Vector3.UP, dir.normalized()))
+
+
+func _process_mat(speed: float, life: float, grav: Vector3, spread: float, additive: bool) -> ParticleProcessMaterial:
+	var key := "%.1f_%.2f_%s_%.0f_%s" % [speed, life, grav.snapped(Vector3.ONE * 0.5), spread, additive]
+	if _pm_cache.has(key):
+		return _pm_cache[key]
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.UP
+	pm.spread = spread
+	pm.initial_velocity_min = speed * 0.4
+	pm.initial_velocity_max = speed
+	pm.gravity = grav
+	pm.damping_min = 0.5
+	pm.damping_max = 2.0
+	pm.angular_velocity_min = -300.0
+	pm.angular_velocity_max = 300.0
+	var curve := CurveTexture.new()
+	var c := Curve.new()
+	c.add_point(Vector2(0, 1.0))
+	c.add_point(Vector2(1, 0.15 if additive else 1.6))
+	curve.curve = c
+	pm.scale_curve = curve
+	var ramp := GradientTexture1D.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 1, 1))
+	g.set_color(1, Color(1, 1, 1, 0))
+	ramp.gradient = g
+	pm.color_ramp = ramp
+	_pm_cache[key] = pm
+	return pm
+
+
+func _draw_pass(col: Color, size: float, additive: bool, cubes: bool) -> Mesh:
+	# snap the colour so random colours (fireworks, paint) reuse a bounded set
+	col = Color(snappedf(col.r, 0.05), snappedf(col.g, 0.05), snappedf(col.b, 0.05), snappedf(col.a, 0.1))
+	var dkey := "%s_%.2f_%s_%s" % [col.to_html(), size, additive, cubes]
+	if _draw_cache.has(dkey):
+		return _draw_cache[dkey]
+	var mesh: PrimitiveMesh
+	if cubes:
+		var bm := BoxMesh.new()
+		bm.size = Vector3.ONE * size
+		mesh = bm
+		var m := StandardMaterial3D.new()
+		m.vertex_color_use_as_albedo = true
+		m.albedo_color = col
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mesh.material = m
+	else:
+		var q := Blocks.puff_mesh(size * 1.4, additive).duplicate() as QuadMesh
+		var m := (q.material as StandardMaterial3D).duplicate() as StandardMaterial3D
+		m.albedo_color = col
+		q.material = m
+		mesh = q
+	_draw_cache[dkey] = mesh
+	return mesh
 
 
 func _explosion_visual(pos: Vector3, radius: float, big: bool) -> void:
