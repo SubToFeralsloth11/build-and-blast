@@ -768,7 +768,7 @@ func connected(blocks: Array) -> Dictionary:
 func stats(d: Dictionary) -> Dictionary:
 	var s := {"blocks": 0, "mass": 0.0, "thrust": 0.0, "wings": 0, "weapons": 0, "wheels": 0, "floats": 0.0,
 		"lift_max": 0.0, "com": Vector3.ZERO, "col": Vector3.ZERO, "has_seat": false, "loose": 0,
-		"engine_kw": 0.0, "hub_kw": 0.0, "driven": 0}
+		"engine_kw": 0.0, "hub_kw": 0.0, "driven": 0, "lift_coef": 0.0, "down_coef": 0.0}
 	var com := Vector3.ZERO
 	var col := Vector3.ZERO
 	for b in d.blocks:
@@ -796,9 +796,17 @@ func stats(d: Dictionary) -> Dictionary:
 			"hover":
 				s.lift_max += def.force
 			"wing":
-				if def.lift > 0.0 and not def.get("water_only", false):
-					s.wings += 1
-					col += Blocks.center_of(b)
+				if def.lift != 0.0 and not def.get("water_only", false):
+					# lift = coef * v^2 along the wing normal (vehicle.gd); only count what points up
+					var bas := Blocks.basis_of(b)
+					var along := maxf((bas * Vector3.FORWARD).dot(Vector3.FORWARD), 0.0)
+					var k: float = absf(def.lift) * along * along
+					var up: float = (bas * def.get("nrm", Vector3.UP)).y * signf(def.lift)
+					s.lift_coef += k * maxf(up, 0.0)
+					s.down_coef += k * maxf(-up, 0.0)
+					if up > 0.3:
+						s.wings += 1
+						col += Blocks.center_of(b)
 			"wheel":
 				s.wheels += 1
 				var cfg: Dictionary = def.cfg.duplicate()

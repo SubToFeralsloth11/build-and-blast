@@ -21,8 +21,11 @@ Open the folder in Godot 4.7 and press Play, or run `godot --path .`
 | B / P / C | Build / Paint / Configure tool |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Enter | Test drive at the place picked under TEST |
+| V | Show forces and airflow |
 
-In the garage, a yellow marker shows the centre of mass and a blue marker shows the centre of lift. Blocks that are not connected to the seat turn red, and they fall off when you test the vehicle. The bottom bar shows mass, thrust-to-weight, an estimated takeoff speed, lift and whether the vehicle floats.
+In the garage, a yellow marker shows the centre of mass and a blue marker shows the centre of lift. Blocks that are not connected to the seat turn red, and they fall off when you test the vehicle. The bottom bar shows mass, thrust-to-weight, an estimated takeoff speed, lift, engine power and whether the vehicle floats. It turns red if driven wheels have no engine.
+
+**Forces & airflow (V, or the button above the bottom bar)** draws what every working part does, using the same numbers as the test drive: blue arrows for wing lift and purple for downforce (at the air speed you pick: 80, 150, 250 or 400 km/h), orange arrows for engine thrust and red for Shift boosters, green for rotors, hover pads, balloons and VTOL fans, light blue double arrows for control flaps, yellow arrows for the drive force each wheel gets from the engines, and a yellow ring with the power of each engine. An orange dot and line mark the centre of thrust and the thrust line. Animated air streaks flow past the vehicle: they go over the blocks, turn blue where wings push them down, purple behind spoilers and orange in engine exhaust. The panel lists wing lift against weight, the speed at which the wings carry the vehicle, thrust and boost to weight, vertical lift, wheel force, and whether the thrust line passes above or below the centre of mass.
 
 New blocks snap flush against the face you point at, so they sit right on top of half blocks and plates, against sideways half blocks, along the sides of resized blocks, and against blocks turned 45 degrees (they line up with the turned block). On a long face, a block slides along it in whole-block steps (half-block steps for blocks smaller than 1).
 
@@ -54,20 +57,21 @@ On foot: WASD to walk, Shift to sprint, Space to jump (and to swim up in water),
 Pick a place in the **TEST** dropdown at the top right of the garage, then press **Test drive** (or Enter). The pause menu (Esc) teleports between them.
 
 - **Desert:** stunt park with ramps, a loop, crates, explosive barrels, practice targets and enemy turrets on the mesas.
-- **Race Track:** a looped circuit in the dunes south of the stunt park, with curbs, a start/finish gantry, a grandstand and barriers on the outside of the corners. You start just before the line. Crossing it starts the lap clock; a lap counts once you pass all three sectors in order. The HUD shows the running lap time, and the best lap stays in the stats panel.
+- **Race Track:** a looped circuit in the dunes south of the stunt park, with curbs, a start/finish gantry, a grandstand and barriers on the outside of the corners. The asphalt gives wheels 60% more grip than sand. You start just before the line. Crossing it starts the lap clock; a lap counts once you pass all three sectors in order. The HUD shows the running lap time, and the best lap stays in the stats panel.
 - **Sea:** harbor with a pier and launch ramp, open sea, islands and enemy boats.
-- **Carrier:** a stationary aircraft carrier out at sea, 290 m long with an 18 m high flight deck, an angled landing deck, catapult tracks and an island with a turning radar. You spawn on the stern end of the deck facing the bow, so planes can take off, and you can land back on it.
+- **Carrier:** a stationary aircraft carrier out at sea, 290 m long with an 18 m high flight deck, an angled landing deck, catapult tracks and an island with a turning radar. You spawn on the stern end of the deck facing the bow, so planes can take off, and you can land back on it. The deck, like the runway, gives wheels 40% more grip.
 - **Runway / Sky:** the airfield, or a mid-air start at 230 m.
 - **Test Zone:** a separate 4 km by 4 km flat white floor with a 1 m grid (darker lines every 10 m and 100 m, a red X axis and a blue Z axis through the spawn). Nothing else is there. Drive off the yellow edge and you respawn.
 
 **Screen shake** (pause menu): Off, Low, Normal, Strong or Extreme. The choice is saved.
 
-## Blocks (247)
+## Blocks (257)
 
 Every block is listed in `scripts/block_catalog.gd`. Hover over a block in the palette to see its mass, armor and what it does.
 
 - **Structure (51):** pilot seat, passenger seat, cockpit canopy. Shapes: block, wedge, plate, half block, low wedge, corner slope, inner corner, cylinder, beam, ball, pyramid, truss frame. Materials: steel, wood, armor, heavy armor, titanium (light and tough), carbon (featherweight), glass, lead ballast, foam, concrete, gold, chrome, neon (glows in its paint colour), rubber bumper (cuts crash damage nearby), plus hazard, crate, scrap, camo and checker looks.
-- **Wheels (17):** wheel, monster, small, racing slick, off-road, tractor, mega, caster, spiked, drift, bike, rally, whitewall, hub motor, skate, ski, and tank tracks. Each has its own radius, travel, grip, side grip, torque and top speed. Tracks use **tank (skid) steering**, and any wheel can be switched to it in Configure.
+- **Wheels (27):** wheel, monster, small, racing slick, off-road, tractor, mega, caster, spiked, drift, bike, rally, whitewall, hub motor, skate, ski, and tank tracks, plus the 10 engines below. Each wheel has its own radius, travel, grip, side grip, force and top speed. Tracks use **tank (skid) steering**, and any wheel can be switched to it in Configure. Paved surfaces (race track, runway, carrier deck) add grip.
+- **Engines (in Wheels):** driven wheels only turn when the vehicle has an engine. Mower Engine 9 kW, Inline-4 60 kW, Turbo Four 115 kW, V6 160 kW, Diesel 200 kW (strong pull at low speed), Electric Motor 150 kW (full force from a standstill), V8 250 kW, V12 400 kW, Racing V10 560 kW, Turbine Drive 950 kW. All engines add up and share their power over every driven wheel: full pulling force at low speed, then power divided by speed, so a weak engine in a heavy vehicle crawls and a big one spins the tyres. Each wheel can only pass so much force, set by its type and power setting. Hub Motor Wheels carry their own 40 kW motor and need no engine. Configure sets an engine's power from 25% to 200%; shooting it off cuts the power.
 - **Mechanical (39):** see below.
 - **Propulsion (30):** thrusters (mini, normal, big), ion drive, plasma drive, jet, afterburner jet (more than double thrust on Shift), turbofan, ramjet (gets stronger with speed), pulse jet, twin jet, rockets (mini, normal, mega), solid booster (one 4-second burn), propellers (normal, big, contra-rotating, ducted fan), VTOL lifter, hover pads (normal and big, work over land and water), rotors (mini, normal, big), balloons (normal, hydrogen, steerable hot-air, blimp envelope), anti-grav core.
 - **Flight (24):** wings (normal, small, thick, swept, delta, glider), tail fin, winglet, control flap, canard, big flap, elevator, aileron and rudder (each only does pitch, roll or yaw), air brake, spoilers and front splitter (downforce), parachute, drogue chute, gyros (mini, normal, super), auto leveler.

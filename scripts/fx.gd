@@ -237,11 +237,15 @@ func drop_trail(p: GPUParticles3D) -> void:
 	get_tree().create_timer(p.lifetime + 0.2).timeout.connect(p.queue_free)
 
 
-## Basis whose +Y axis points along `dir`.
+## Basis whose +Y axis points along `dir`. (Quaternion's shortest-arc
+## constructor turns around Y for a straight-down target, which keeps +Y up.)
 func basis_up(dir: Vector3) -> Basis:
 	if dir.length_squared() < 0.0001:
 		return Basis.IDENTITY
-	return Basis(Quaternion(Vector3.UP, dir.normalized()))
+	var d := dir.normalized()
+	if d.y < -0.9999:
+		return Basis(Vector3.RIGHT, PI)
+	return Basis(Quaternion(Vector3.UP, d))
 
 
 func _process_mat(speed: float, life: float, grav: Vector3, spread: float, additive: bool) -> ParticleProcessMaterial:

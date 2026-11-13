@@ -12,6 +12,7 @@ signal message(text: String)
 const MAX_BLOCKS := 400
 const SIZE_MIN := 0.25
 const SIZE_MAX := 8.0
+const ForceView := preload("res://scripts/force_view.gd")
 
 var design_name := "My Vehicle"
 var cells := {}            # Vector3i key -> block dict
@@ -25,6 +26,9 @@ var mirror := true
 var paint_color: Variant = null   # Color or null = block default
 var selected_cell: Variant = null
 var active := true
+## Forces and airflow overlay (V).
+var show_forces := false
+var force_view: Node3D
 
 var cam: Camera3D
 var yaw := -0.7
@@ -79,6 +83,9 @@ func _ready() -> void:
 	_col_marker = _marker(Color("#3fd6ff"), "LIFT", -0.45)
 	_loose_root = Node3D.new()
 	add_child(_loose_root)
+	force_view = ForceView.new()
+	force_view.visible = false
+	add_child(force_view)
 	load_design(Designs.empty_design(), false)
 
 
@@ -608,7 +615,21 @@ func _refresh() -> void:
 	_floor.position.y = lo - 0.95
 	_mirror_plane.position = Vector3(0, _center().y, _center().z)
 	_mirror_plane.scale = Vector3.ONE * maxf(1.0, _radius() / 4.0)
+	if show_forces:
+		force_view.update(d)
 	changed.emit()
+
+
+func toggle_forces() -> void:
+	show_forces = not show_forces
+	force_view.visible = show_forces
+	_refresh()
+
+
+## Steps the air speed the force arrows are drawn for.
+func cycle_force_speed() -> void:
+	force_view.cycle_speed()
+	_refresh()
 
 
 # ---------------------------------------------------------------- input
@@ -696,6 +717,8 @@ func _unhandled_input(e: InputEvent) -> void:
 					remove(_hover_cell)
 			KEY_HOME:
 				_focus_goal = _center()
+			KEY_V:
+				toggle_forces()
 
 
 func _pick(c: Vector3i) -> void:

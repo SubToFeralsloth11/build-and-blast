@@ -68,6 +68,7 @@ func _simtest(args: PackedStringArray) -> void:
 		fails += await _world_test()
 		fails += await _missile_test()
 		fails += await _engine_test()
+		fails += _forces_test()
 		print("SIMTEST DONE fails=%d" % fails)
 		return
 	for d in list:
@@ -93,6 +94,7 @@ func _simtest(args: PackedStringArray) -> void:
 	fails += await _world_test()
 	fails += await _missile_test()
 	fails += await _engine_test()
+	fails += _forces_test()
 	print("SIMTEST DONE fails=%d" % fails)
 
 
@@ -155,6 +157,24 @@ func _world_test() -> int:
 	f += _wcheck(not seen.has("race_lap"), "skipping the sectors gives no lap %s" % [seen])
 	main.back_to_builder()
 	await _frames(2)
+	return f
+
+
+## Garage force overlay numbers: a jet shows lift and thrust, a buggy wheel drive.
+func _forces_test() -> int:
+	var f := 0
+	var b: Node = main.builder
+	var p: Array = Designs.presets()
+	b.load_design(p[6], false)
+	b.toggle_forces()
+	var jet: Dictionary = b.force_view.summary.duplicate()
+	b.load_design(p[0], false)
+	var buggy: Dictionary = b.force_view.summary.duplicate()
+	b.toggle_forces()
+	print("FORCES jet lift %.0f N thrust %.0f N takeoff %d km/h | buggy %d kW, %.0f N at the wheels" % [jet.lift, jet.thrust, int(jet.takeoff_kmh), int(buggy.engine_kw), buggy.wheel_force])
+	f += _wcheck(jet.lift > 0.0 and jet.thrust > 0.0 and jet.takeoff_kmh > 50.0, "force view: jet has lift, thrust and a takeoff speed")
+	f += _wcheck(buggy.engine_kw > 0.0 and buggy.wheel_force > 0.0, "force view: buggy engine drives the wheels")
+	f += _wcheck(not b.force_view.visible, "force view hides again")
 	return f
 
 
@@ -770,6 +790,19 @@ func _world_shots() -> void:
 	var p: Array = Designs.presets()
 	await _process_frames(20)
 	await _shot("20b_garage_bar")
+	main.builder.load_design(p[6], false)
+	main.builder.toggle_forces()
+	await _process_frames(90)
+	await _shot("20c_forces_jet")
+	main.builder.load_design(p[4], false)
+	await _process_frames(90)
+	await _shot("20d_forces_car")
+	main.builder.cycle_force_speed()
+	main.builder.cycle_force_speed()
+	main.builder.load_design(p[8], false)
+	await _process_frames(90)
+	await _shot("20e_forces_heli")
+	main.builder.toggle_forces()
 	main.builder.load_design(p[4], false)
 	main.start_test("track")
 	Controls.sim = {"always": 1.0}

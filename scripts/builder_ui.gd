@@ -34,6 +34,9 @@ var _toast_t := 0.0
 var _load_menu: MenuButton
 var _preset_menu: MenuButton
 var _loc_pick: OptionButton
+var _forces_btn: Button
+var _air_btn: Button
+var _forces_info: Label
 var _presets: Array = []
 
 
@@ -47,6 +50,7 @@ func setup(b: Node) -> void:
 	_build_left()
 	_build_right_panel()
 	_build_bottom()
+	_build_forces()
 	builder.changed.connect(_on_changed)
 	builder.selected.connect(func(_c): _rebuild_right())
 	builder.message.connect(toast)
@@ -592,8 +596,8 @@ func _on_changed() -> void:
 	var parts := ["Blocks %d" % s.blocks, "Mass %d kg" % s.mass]
 	if s.thrust > 0:
 		parts.append("Thrust/Weight %.2f" % tw)
-	if s.wings > 0:
-		var v := sqrt(s.mass * 9.8 / (0.35 * s.wings + 0.4))
+	if s.wings > 0 and s.lift_coef > 0.0:
+		var v := sqrt(s.mass * 9.8 / s.lift_coef)
 		parts.append("Wings %d (takeoff ~%d km/h)" % [s.wings, int(v * 3.6)])
 	if s.lift_max > 0:
 		parts.append("Lift %d%%" % int(s.lift_max / (s.mass * 9.8) * 100.0))
@@ -614,4 +618,37 @@ func _on_changed() -> void:
 		bad = true
 	_stats.text = txt
 	_stats.add_theme_color_override("font_color", UI.BAD if bad else UI.TEXT)
+	_forces_btn.button_pressed = builder.show_forces
+	_air_btn.visible = builder.show_forces
+	_forces_info.visible = builder.show_forces
+	if builder.show_forces:
+		_air_btn.text = "Air speed %d km/h" % builder.force_view.SPEEDS_KMH[builder.force_view.speed_idx]
+		_forces_info.text = builder.force_view.summary_text()
 	_rebuild_right()
+
+
+## Floating panel above the bottom bar: forces/airflow toggle, air speed, and the numbers.
+func _build_forces() -> void:
+	var p := UI.panel(Color(0.06, 0.07, 0.1, 0.82))
+	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	p.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	p.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	p.offset_bottom = -72
+	p.offset_top = -72
+	add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	p.add_child(v)
+	_forces_info = UI.label("", 13, UI.TEXT)
+	_forces_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_forces_info)
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 8)
+	v.add_child(h)
+	_forces_btn = UI.button("Forces & airflow (V)", func(): builder.toggle_forces(),
+		"Show lift, downforce, thrust, wheel drive and engine power on every part, with animated airflow")
+	_forces_btn.toggle_mode = true
+	h.add_child(_forces_btn)
+	_air_btn = UI.button("Air speed", func(): builder.cycle_force_speed(), "Air speed the wing forces are worked out for")
+	h.add_child(_air_btn)
