@@ -11,7 +11,8 @@ const SimTest := preload("res://tools/sim_test.gd")
 
 enum { CAM_CHASE, CAM_FREE, CAM_FIRST }
 const CAM_NAMES := ["chase", "free orbit", "first person"]
-const SEAT_HEAD := Vector3(0, 0.55, 0.1)
+const SEAT_HEAD := Vector3(0, 0.95, 0.1)      # eye above the seat block, to see over the hood
+const SEAT_HEAD_LOW := Vector3(0, 0.5, 0.1)   # when a block sits on top of the seat
 const ENTER_RANGE := 4.0
 
 var env: Environment
@@ -276,6 +277,18 @@ func _seat_transform() -> Transform3D:
 	return vehicle.global_transform * Transform3D(seat.basis, seat.pos)
 
 
+## First-person eye in seat space: up high unless a block sits on the seat.
+func _seat_head() -> Vector3:
+	var seat: Dictionary = vehicle.parts[vehicle.seat_idx]
+	var inv: Basis = seat.basis.inverse()
+	for p in vehicle.parts:
+		if p.alive and p != seat:
+			var q: Vector3 = inv * (p.pos - seat.pos)
+			if absf(q.x) < 0.7 and absf(q.z) < 0.7 and q.y > 0.3 and q.y < 1.7:
+				return SEAT_HEAD_LOW
+	return SEAT_HEAD
+
+
 ## Shows the little robot driver only while the pilot is seated and the camera is outside.
 func _sync_driver() -> void:
 	if not _seat_ok():
@@ -455,7 +468,7 @@ func _update_camera(delta: float) -> void:
 	elif close:
 		var st := _seat_transform()
 		var look := Basis.from_euler(Vector3(fp_pitch, fp_yaw, 0.0))
-		cam.global_transform = Transform3D(st.basis.orthonormalized() * look, st * SEAT_HEAD)
+		cam.global_transform = Transform3D(st.basis.orthonormalized() * look, st * _seat_head())
 		cam.fov = lerpf(cam.fov, 75.0 + clampf(speed / 5.0, 0.0, 12.0), delta * 3.0)
 	else:
 		if cam_mode == CAM_CHASE and vehicle.alive and speed > 4.0 and _mouse_idle > 1.2:
