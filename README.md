@@ -28,7 +28,7 @@ New blocks snap flush against the face you point at, so they sit right on top of
 
 **Sizes:** every Structure block except the pilot seat can be 0.25 to 8 blocks along each side, in 0.25 steps. Set the size before placing with the Width/Height/Length buttons in the right panel or [ / ], or select a placed block with Configure to resize it (it grows around its centre). Mass, armor and buoyancy scale with volume. Mechanical parts, wheels, engines, weapons and gadgets keep their size.
 
-**Configure** sets each engine, weapon, mechanism or gadget's control (any of 16 channels), inverts it, and sets its power from 25% to 200%. You can also set the steering mode (including tank steering) and drive for each wheel, and the movement mode for pistons and hinges. **Apply to all** copies a block's settings to every block of the same type.
+**Configure** sets each engine, weapon, mechanism or gadget's control (any of 16 channels), inverts it, and sets its power from 25% to 200%. You can also set the steering mode (including tank steering) and drive for each wheel, and the movement mode, cycle start and tank steering for pistons and hinges. **Apply to all** copies a block's settings to every block of the same type (each mechanism keeps its own cycle start).
 
 ## Test drive controls
 
@@ -49,13 +49,13 @@ New blocks snap flush against the face you point at, so they sit right on top of
 
 On foot: WASD to walk, Shift to sprint, Space to jump (and to swim up in water), mouse to look, V switches first and third person. While you are out, the vehicle gets no driving input, but toggles you switched on stay on. R puts you back in the seat of a fresh vehicle.
 
-## Blocks (245)
+## Blocks (247)
 
 Every block is listed in `scripts/block_catalog.gd`. Hover over a block in the palette to see its mass, armor and what it does.
 
 - **Structure (51):** pilot seat, passenger seat, cockpit canopy. Shapes: block, wedge, plate, half block, low wedge, corner slope, inner corner, cylinder, beam, ball, pyramid, truss frame. Materials: steel, wood, armor, heavy armor, titanium (light and tough), carbon (featherweight), glass, lead ballast, foam, concrete, gold, chrome, neon (glows in its paint colour), rubber bumper (cuts crash damage nearby), plus hazard, crate, scrap, camo and checker looks.
 - **Wheels (17):** wheel, monster, small, racing slick, off-road, tractor, mega, caster, spiked, drift, bike, rally, whitewall, hub motor, skate, ski, and tank tracks. Each has its own radius, travel, grip, side grip, torque and top speed. Tracks use **tank (skid) steering**, and any wheel can be switched to it in Configure.
-- **Mechanical (37):** see below.
+- **Mechanical (39):** see below.
 - **Propulsion (30):** thrusters (mini, normal, big), ion drive, plasma drive, jet, afterburner jet (more than double thrust on Shift), turbofan, ramjet (gets stronger with speed), pulse jet, twin jet, rockets (mini, normal, mega), solid booster (one 4-second burn), propellers (normal, big, contra-rotating, ducted fan), VTOL lifter, hover pads (normal and big, work over land and water), rotors (mini, normal, big), balloons (normal, hydrogen, steerable hot-air, blimp envelope), anti-grav core.
 - **Flight (24):** wings (normal, small, thick, swept, delta, glider), tail fin, winglet, control flap, canard, big flap, elevator, aileron and rudder (each only does pitch, roll or yaw), air brake, spoilers and front splitter (downforce), parachute, drogue chute, gyros (mini, normal, super), auto leveler.
 - **Water (17):** floats (normal, big), pontoon, inflatable tube, hull block, hull bow, keel (stops sideways sliding), boat rudder, hydrofoil, boat props (normal, big), water jet, paddle wheel, steerable outboard motor, **ballast tank** (C floods it to dive, Space blows it to surface) and anchor.
@@ -68,13 +68,15 @@ Each block has its own health. Bullets, explosions and hard crashes knock blocks
 
 Pistons, hinges and rotators move every block attached to their **yellow/black striped face**, along with anything attached to those blocks. You can put mechanisms on top of other mechanisms (a turntable, then a hinge, then a piston makes a crane arm).
 
-- **Pistons:** small, normal, long, telescopic (6 blocks), quick, hydraulic ram, hydraulic cylinder, pneumatic kicker, lift jack, pump piston.
-- **Hinges:** hinge, servo, wide servo (180 degrees), heavy servo, fast servo, steering hinge, pitch/yaw/roll gimbals for thrust vectoring, landing gear hinge, tilt-rotor hinge, flipper arm, wiggle servo, sweep servo.
+- **Pistons:** small, normal, long, telescopic (6 blocks), quick, hydraulic ram, hydraulic cylinder, pneumatic kicker, lift jack, pump piston, leg lifter.
+- **Hinges:** hinge, servo, wide servo (180 degrees), heavy servo, fast servo, steering hinge, pitch/yaw/roll gimbals for thrust vectoring, landing gear hinge, tilt-rotor hinge, flipper arm, wiggle servo, sweep servo, leg servo.
 - **Rotators:** spinner, turntable, heavy motor, turbo spinner (always on).
 - **Suspension:** coil spring, shock absorber, heavy, racing, long-travel, air suspension (Space/C changes the ride height), leaf spring, pogo leg. A wheel touching a suspension block gets that block's extra travel, stiffness and damping. With no wheel, the block works as a springy leg along its bottom face.
 - **Decoupler:** Trigger 4 drops everything beyond it.
 
-In **Configure**, each mechanism has a key, an invert option, a speed (Power) and a movement mode: **Return** follows the key and springs back, **Hold** stays wherever you leave it, and **Auto** swings back and forth by itself. Configure also shows how many blocks the mechanism moves. It warns you if the moving side also touches the rest of the vehicle, because then the mechanism is jammed and can't move.
+In **Configure**, each mechanism has a key, an invert option, a speed (Power) and a movement mode: **Return** follows the key and springs back, **Hold** stays wherever you leave it, **Auto** swings back and forth by itself, and **Step** (pistons only) pushes out for the first half of each cycle and stays retracted for the second half. Auto and Step cycles run forward on a positive key and backward on a negative one (W forward, S backward). **Cycle start** sets where in the cycle each one begins (0 to 315 degrees). **Tank steer** mixes in A/D so that the mechanisms on one side run backward while the other side runs forward. Configure also shows how many blocks the mechanism moves. It warns you if the moving side also touches the rest of the vehicle, because then the mechanism is jammed and can't move.
+
+**Walkers:** a leg is a **Leg Servo** hip (swings 20 degrees forward and back) carrying a **Leg Lifter** (lifts the leg 1 block) with a suspension block as the foot. Both run on W/S with tank steer by default and cycle at the same speed. Set the hip's cycle start 90 degrees behind its lifter on the right side and 90 degrees ahead on the left, and give neighbouring legs cycle starts 180 degrees apart. The ground grips a planted foot as it sweeps backward, so the vehicle walks. The Widowmaker Spider preset is a working example.
 
 ## World
 
@@ -86,7 +88,7 @@ In **Configure**, each mechanism has a key, an invert option, a speed (Power) an
 
 ## Presets and random builds
 
-There are 16 presets: Starter Buggy, Battle Buggy, Monster Masher, Iron Rhino Tank, Nitro Rocket Car, Sky Sparrow, Thunder Jet, Bomber Pelican, Hornet Chopper, Wave Rider, Gunboat Kraken, Balloon Barge, Mega Crane (turntable, heavy servo, telescopic piston and super magnet), Bouncy Lowrider (air suspension), Hover Viper (hover pads) and Yellow Submarine (ballast tanks). **Random!** generates a new car, monster truck, plane, helicopter or boat with random size, colours, wheel type, suspension, weapons and gadgets. Planes are balanced so their centre of mass sits ahead of their lift. Helicopters get enough rotors to hover. Saved designs go to `user://designs/*.json`.
+There are 17 presets: Starter Buggy, Battle Buggy, Monster Masher, Iron Rhino Tank, Nitro Rocket Car, Sky Sparrow, Thunder Jet, Bomber Pelican, Hornet Chopper, Wave Rider, Gunboat Kraken, Balloon Barge, Mega Crane (turntable, heavy servo, telescopic piston and super magnet), Bouncy Lowrider (air suspension), Hover Viper (hover pads), Yellow Submarine (ballast tanks) and Widowmaker Spider (an eight-legged walker: W/S walk, A/D turn on the spot, Shift pounces on four belly rockets, lasers and an auto turret on Fire 1, rocket pods on Fire 2, tesla coil on G). **Random!** generates a new car, monster truck, plane, helicopter or boat with random size, colours, wheel type, suspension, weapons and gadgets. Planes are balanced so their centre of mass sits ahead of their lift. Helicopters get enough rotors to hover. Saved designs go to `user://designs/*.json`.
 
 ## Battery use
 

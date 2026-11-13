@@ -154,6 +154,12 @@ static func _mechanical(B: Node) -> void:
 		var spd: float = deg_to_rad(h[6]) if h[8] != "osc" else float(h[6])
 		list.append([h[0], h[1], h[2], h[3], h[4], "%s %s" % [h[11], H], {"max": deg_to_rad(h[5]), "speed": spd, "axis": h[9], "out": h[10], "cfg": ch(h[7], {"mode": h[8]})}])
 	_many(B, "Mechanical", {"kind": "hinge", "vis": "hinge"}, list)
+	# walker kit: same cycle speed, so a hip and its lifter stay in step
+	var W := "Runs on W/S (backward on S) and skid-steers with A/D. Give each leg's hip and lifter phases 90 degrees apart, and opposite legs 180 degrees apart."
+	B._d("leg_servo", "Leg Servo", "Mechanical", 30, 160, "#b98cff", "Walker hip: swings a leg forward and back. " + W,
+		{"kind": "hinge", "vis": "hinge", "max": deg_to_rad(20.0), "speed": 4.0, "axis": Vector3.UP, "out": Vector3.RIGHT, "cfg": ch("throttle", {"mode": "osc", "tank": true, "phase": 0})})
+	B._d("leg_lift", "Leg Lifter", "Mechanical", 35, 160, "#b98cff", "Walker knee: lifts the leg on its forward swing and plants it for the push. " + W,
+		{"kind": "piston", "vis": "piston", "stroke": 1.0, "speed": 4.0, "axis": Vector3.UP, "out": Vector3.UP, "cfg": ch("throttle", {"mode": "step", "tank": true, "phase": 0})})
 	_many(B, "Mechanical", {"kind": "rotator", "vis": "rotator", "axis": Vector3.UP, "out": Vector3.UP}, [
 		["spinner", "Spinner", 30, 120, "#9ccc65", "Spins the blocks on its top face with Q/E.", {"speed": 6.0, "cfg": ch("yaw")}],
 		["turntable", "Turntable", 50, 200, "#9ccc65", "Slow rotating base for cranes and turrets (Q/E).", {"speed": 1.2, "cfg": ch("yaw")}],

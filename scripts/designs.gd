@@ -71,6 +71,7 @@ func presets() -> Array:
 	out.append(_lowrider())
 	out.append(_hovercraft())
 	out.append(_sub())
+	out.append(_spider())
 	return out
 
 
@@ -467,6 +468,72 @@ func _sub() -> Dictionary:
 	b.add("torpedo", 0, -1, -3)
 	b.add("light", 0, 1, -1)
 	return b.done("Yellow Submarine")
+
+
+## Eight-legged walking robot. Each leg is a Leg Servo hip (swings it fore and
+## aft) carrying a Leg Lifter (raises it on the forward swing), a jointed leg and
+## a sprung foot. Diagonal legs share a phase, so four feet are always planted:
+## W/S walk, A/D skid-steer, Shift pounces on rockets.
+func _spider() -> Dictionary:
+	var b := DB.new()
+	var body := "#1b1d22"
+	var red := "#e53935"
+	var leg := "#2b2f36"
+	var flat := Blocks.rot_toward(Vector3.FORWARD, Vector3.RIGHT)   # beam lying along X
+	var turn := Blocks.rot_toward(Vector3.BACK, Vector3.UP)         # 180 degrees about Y
+	# thorax (armored front) and a raised abdomen
+	for z in range(-3, 4):
+		for x in range(-1, 2):
+			b.add("armor" if z <= -2 else "cube", x, 0, z, 0, body)
+			if z >= 0:
+				b.add("cube", x, 1, z, 0, body)
+	b.put("seat", 0, 0, -1)
+	for x in range(-1, 2):
+		b.add("wedge", x, 1, 4, turn, body)
+	# red hourglass on the back, tesla coil on top of it
+	b.add("neon", 0, 2, 2, 0, red)
+	b.add("neon", 0, 2, 1, 0, red)
+	b.add("tesla", 0, 2, 3, 0, "", {"ch": "fire3", "inv": false, "pow": 100})
+	# head: laser fangs, headlights, auto turret and glowing eyes
+	b.add("armor_wedge", 0, 0, -4, 0, body)
+	b.sym("laser", 1, 0, -4, 0, "", {"ch": "fire1", "inv": false, "pow": 100})
+	b.sym("light", 1, 1, -4)
+	b.add("turret", 0, 1, -2, 0, leg, {"ch": "fire1", "inv": false, "pow": 100})
+	b.sym("rockets", 1, 1, -1, 0, leg, {"ch": "fire2", "inv": false, "pow": 100})
+	for x in [-1, 0, 1]:
+		b.add("neon", x, 1, -3, 0, red)
+		var eye: Dictionary = b.cells[Vector3i(x, 1, -3)]
+		var big: bool = x == 0
+		eye["s"] = [0.45, 0.45, 0.45] if big else [0.3, 0.3, 0.3]
+		eye["o"] = [0.0, -0.275 if big else -0.35, -0.2]
+	# belly: stabilizer, glow and pounce rockets pointing down
+	b.add("supergyro", 0, -1, 0)
+	b.add("underglow", 0, -1, -2, 0, red)
+	var up := Blocks.rot_toward(Vector3.UP, Vector3.BACK)
+	b.sym("rocket", 1, -1, 1, up)
+	b.sym("rocket", 1, -1, -1, up)
+	# legs, front to back
+	var zs := [-3, -1, 1, 3]
+	for i in zs.size():
+		var z: int = zs[i]
+		for s in [1, -1]:
+			# right legs 1 and 3 step with left legs 2 and 4, then the others
+			var lift_ph: int = 0 if (i % 2 == 0) == (s > 0) else 180
+			var hip_ph: int = posmod(lift_ph - 90 * s, 360)
+			var walk := {"ch": "throttle", "inv": false, "pow": 140, "tank": true}
+			var hip := walk.duplicate()
+			hip.merge({"mode": "osc", "phase": hip_ph})
+			var lift := walk.duplicate()
+			lift.merge({"mode": "step", "phase": lift_ph})
+			b.add("leg_servo", 2 * s, 0, z, 0 if s > 0 else turn, "", hip)
+			b.add("leg_lift", 3 * s, 0, z, 0, "", lift)
+			b.add("cube", 3 * s, 1, z, 0, red)
+			b.add("beam", 4 * s, 1, z, flat, leg)
+			b.add("cube", 5 * s, 1, z, 0, leg)
+			b.add("beam", 5 * s, 0, z, 0, leg)
+			b.add("beam", 5 * s, -1, z, 0, leg)
+			b.add("heavysusp", 5 * s, -2, z, 0, red)
+	return b.done("Widowmaker Spider")
 
 
 ## A random but working contraption.

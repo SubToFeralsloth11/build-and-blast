@@ -503,7 +503,11 @@ func apply_cfg_to_all(c: Vector3i) -> int:
 	var n := 0
 	for cc in cells:
 		if cc != c and cells[cc].id == cells[c].id:
+			# each leg keeps its own place in the walking cycle
+			var ph: Variant = cells[cc].cfg.get("phase")
 			cells[cc].cfg = cells[c].cfg.duplicate()
+			if ph != null:
+				cells[cc].cfg["phase"] = ph
 			n += 1
 	return n
 

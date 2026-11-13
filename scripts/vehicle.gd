@@ -35,6 +35,7 @@ var grounded := 0
 var dmg_mult := 1.0
 var mechs: Array[int] = []      # mover part indices, outermost first
 var _mech_dirty := 0.0
+var _mech_pose := false        # apply mechanism poses on the next update even without movement
 var _time := 0.0
 var _dirty_split := false
 var _crash: Array = []        # [local_pos, dv] collected in _integrate_forces
@@ -174,6 +175,12 @@ func _setup_mechs() -> void:
 		var pivot: Vector3 = p.pos + out * 0.5 if kind == "hinge" else p.pos
 		p["mech"] = {"out": out, "axis": axis, "pivot": pivot, "locked": false, "parent": -1, "W": Transform3D.IDENTITY, "set": []}
 		mechs.append(i)
+		# Auto/Step mechanisms start at their configured point of the cycle
+		var mode: String = p.cfg.get("mode", "return")
+		if kind != "rotator" and (mode == "osc" or mode == "step"):
+			p.st.ph = deg_to_rad(float(p.cfg.get("phase", 0)))
+			p.st.v = _wave(p, mode)
+			_mech_pose = true
 		# every block touching the striped output face
 		var seeds := []
 		for j: int in adj[i]:
@@ -196,6 +203,15 @@ func _setup_mechs() -> void:
 		parts[k].mech.parent = parts[k].gov
 
 
+## Position along an Auto/Step cycle: piston extension or hinge angle for phase st.ph.
+func _wave(p: Dictionary, mode: String) -> float:
+	var ph: float = p.st.ph
+	if p.kind == "piston":
+		var w := maxf(0.0, sin(ph)) if mode == "step" else 0.5 - 0.5 * cos(ph)
+		return w * p.def.stroke
+	return sin(ph) * p.def.max
+
+
 func _mech_target(p: Dictionary, input: float, delta: float) -> bool:
 	var def: Dictionary = p.def
 	var st: Dictionary = p.st
@@ -203,24 +219,21 @@ func _mech_target(p: Dictionary, input: float, delta: float) -> bool:
 	var mode: String = p.cfg.get("mode", "return")
 	var old: float = st.v
 	var spd: float = def.speed * pw
+	if p.kind != "rotator" and (mode == "osc" or mode == "step"):
+		# the cycle runs forward on a positive input and backward on a negative one
+		st.ph += delta * spd * clampf(input, -1.0, 1.0)
+		st.v = _wave(p, mode)
+		return absf(st.v - old) > 0.00001
 	match p.kind:
 		"piston":
 			var lim: float = def.stroke
-			if mode == "osc":
-				if input > 0.5:
-					st.ph += delta * spd
-				st.v = (0.5 - 0.5 * cos(st.ph)) * lim
-			elif mode == "hold":
+			if mode == "hold":
 				st.v = clampf(st.v + input * spd * delta, 0.0, lim)
 			else:
 				st.v = move_toward(st.v, clampf(input, 0.0, 1.0) * lim, spd * delta)
 		"hinge":
 			var lim: float = def.max
-			if mode == "osc":
-				if input > 0.5:
-					st.ph += delta * spd
-				st.v = sin(st.ph) * lim
-			elif mode == "hold":
+			if mode == "hold":
 				st.v = clampf(st.v + input * spd * delta, -lim, lim)
 			else:
 				st.v = move_toward(st.v, clampf(input, -1.0, 1.0) * lim, spd * delta)
@@ -239,6 +252,11 @@ func _update_mechs(delta: float) -> void:
 		if p.alive and not m.locked:
 			var ch: String = p.cfg.get("ch", "always")
 			var input := Controls.value(ch) * (-1.0 if p.cfg.get("inv", false) else 1.0)
+			if p.cfg.get("tank", false):
+				# skid steer: A/D run this side backward and the other side forward
+				var dx: float = p.pos0.x - com_local.x
+				var side := signf(dx) if absf(dx) > 0.1 else 0.0
+				input = clampf(input - Controls.value("steer") * side, -1.0, 1.0)
 			if _mech_target(p, input, delta):
 				moved = true
 		var v: float = p.st.v
@@ -261,8 +279,9 @@ func _update_mechs(delta: float) -> void:
 						p.mov.rotation.y = v
 		var parent_w: Transform3D = parts[m.parent].mech.W if m.parent >= 0 else Transform3D.IDENTITY
 		m.W = parent_w * local
-	if not moved:
+	if not moved and not _mech_pose:
 		return
+	_mech_pose = false
 	for p in parts:
 		if p.gov < 0 or not p.alive:
 			continue
@@ -789,6 +808,10 @@ func _susp(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physics
 	if _has_wheel(p):
 		ext = p.st.ext + p.st.h
 	else:
+		# a leg carried by a hinge or piston moves relative to the body: the
+		# ground grips that motion too, which is what lets walkers push off
+		var mv: Vector3 = gb * (p.pos - p.st.get("lp", p.pos)) / delta
+		p.st.lp = p.pos
 		var ray_len: float = 0.5 + travel + p.st.h
 		var q := PhysicsRayQueryParameters3D.create(wp, wp + out * ray_len, Fx.L_WORLD | Fx.L_PROPS | Fx.L_TARGET, _rids)
 		var h := get_world_3d().direct_space_state.intersect_ray(q)
@@ -796,7 +819,7 @@ func _susp(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physics
 		if not h.is_empty():
 			var dist := wp.distance_to(h.position)
 			var comp := ray_len - dist
-			var v := _pv(h.position, com_w)
+			var v := _pv(h.position, com_w) + mv
 			var share := mass / maxf(1.0, wheel_count + foot_count)
 			var k: float = share * 9.8 / (travel * 0.5) * def.stiff
 			var c: float = 2.0 * sqrt(k * share) * 0.45 * def.damp

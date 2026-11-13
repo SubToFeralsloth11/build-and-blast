@@ -31,6 +31,8 @@ func _kind(d: Dictionary) -> String:
 	var wings := 0
 	for b in d.blocks:
 		match b.id:
+			"leg_servo":
+				return "walker"
 			"rotor":
 				return "heli"
 			"boatprop":
@@ -228,7 +230,7 @@ func _geometry_test() -> int:
 
 func _sim(d: Dictionary) -> Dictionary:
 	var kind := _kind(d)
-	var loc: String = {"car": "desert", "plane": "runway", "heli": "desert", "boat": "sea", "barge": "desert"}[kind]
+	var loc: String = {"car": "desert", "plane": "runway", "heli": "desert", "boat": "sea", "barge": "desert", "walker": "desert"}[kind]
 	main.builder.load_design(d, false)
 	main.start_test(loc)
 	var v: RigidBody3D = main.vehicle
@@ -302,6 +304,24 @@ func _sim(d: Dictionary) -> Dictionary:
 			var gain: float = v.com_world().y - p0.y
 			msg = "climb6s=%.1f up=%.2f" % [gain, _up(v)]
 			ok = gain > 8.0 and _up(v) > 0.8
+		"walker":
+			var fwd0: Vector3 = -v.global_basis.z
+			Controls.sim = {"throttle": 1.0}
+			await _frames(600)
+			var walked: float = (v.com_world() - p0).dot(fwd0)
+			var spd := Vector2(v.linear_velocity.x, v.linear_velocity.z).length()
+			var up_walk := _up(v)
+			var yaw0: Vector3 = -v.global_basis.z
+			Controls.sim = {"steer": -1.0}
+			await _frames(240)
+			var yaw1: Vector3 = -v.global_basis.z
+			var turned := rad_to_deg(atan2(yaw0.cross(yaw1).y, yaw0.dot(yaw1)))
+			var p1: Vector3 = v.com_world()
+			Controls.sim = {"throttle": -1.0}
+			await _frames(300)
+			var back: float = -(v.com_world() - p1).dot(-v.global_basis.z)
+			msg = "walk10s=%.1f spd=%.1f turnL4s=%.0fdeg back5s=%.1f up=%.2f/%.2f" % [walked, spd, turned, back, up_walk, _up(v)]
+			ok = walked > 10.0 and turned > 30.0 and back > 4.0 and up_walk > 0.85 and _up(v) > 0.85
 	# fire every weapon for a second
 	Controls.sim = {"fire1": 1.0, "fire2": 1.0, "fire3": 1.0, "always": 1.0}
 	await _frames(60)
@@ -550,5 +570,20 @@ func _shots() -> void:
 	Controls.sim = {"throttle": 1.0, "lift": -1.0, "always": 1.0}
 	await _frames(240)
 	await _shot("12_sub_dive")
+	Controls.sim = {}
+	main.back_to_builder()
+	main.builder.load_design(p[16], false)
+	await _process_frames(40)
+	await _shot("13_garage_spider")
+	main.start_test("desert")
+	Controls.sim = {"throttle": 1.0, "always": 1.0}
+	await _frames(200)
+	await _shot("14_spider_walk")
+	Controls.sim = {"throttle": 1.0, "fire1": 1.0, "fire3": 1.0, "always": 1.0}
+	await _frames(40)
+	await _shot("15_spider_fire")
+	Controls.sim = {"boost": 1.0, "always": 1.0}
+	await _frames(70)
+	await _shot("16_spider_pounce")
 	Controls.sim = {}
 	main.back_to_builder()

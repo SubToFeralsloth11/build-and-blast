@@ -442,9 +442,27 @@ func _right_config() -> void:
 		var modes := ["return", "hold", "osc"]
 		for m in ["Return: follows the key", "Hold: stays where you leave it", "Auto: swings by itself while on"]:
 			mo.add_item(m)
+		if def.kind == "piston":
+			modes.append("step")
+			mo.add_item("Step: lifts on half of each cycle (walker legs)")
 		mo.selected = maxi(modes.find(cfg.get("mode", def.cfg.mode)), 0)
 		mo.item_selected.connect(func(i): builder.set_cfg(c, "mode", modes[i]))
 		_right.add_child(mo)
+		if def.kind != "rotator":
+			_right.add_child(UI.label("Cycle start (Auto / Step)", 13, UI.MUTED))
+			var po := OptionButton.new()
+			po.focus_mode = Control.FOCUS_NONE
+			for k in 8:
+				po.add_item("%d degrees" % (k * 45))
+			po.selected = posmod(int(round(float(cfg.get("phase", 0)) / 45.0)), 8)
+			po.item_selected.connect(func(i): builder.set_cfg(c, "phase", i * 45))
+			_right.add_child(po)
+		var tk := CheckBox.new()
+		tk.text = "Tank steer (A/D run this side backward to turn)"
+		tk.focus_mode = Control.FOCUS_NONE
+		tk.button_pressed = cfg.get("tank", false)
+		tk.toggled.connect(func(on): builder.set_cfg(c, "tank", on))
+		_right.add_child(tk)
 	if def.cfg.has("pow"):
 		var pl := UI.label("Power: %d%%" % cfg.get("pow", 100), 13, UI.MUTED)
 		_right.add_child(pl)

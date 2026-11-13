@@ -693,6 +693,14 @@ static func _piston(f: Node3D, def: Dictionary, col: Color) -> void:
 				var br := 0.33 if i % 2 == 0 else 0.25
 				_cyl(rod, br, br, 1.0 / 6.0, Vector3(0, -0.5 + (i + 0.5) / 6.0, 0), fold if i % 2 == 0 else rub, Vector3.ZERO, 20)
 			rr = 0.05
+		"leg_lift":  # walker knee: twin hydraulic struts beside the rod, glowing status ring
+			_box(f, Vector3(0.92, 0.22, 0.92), Vector3(0, -0.39, 0), body)
+			_cyl(f, 0.3, 0.34, 0.36, Vector3(0, -0.1, 0), dkm, Vector3.ZERO, 20)
+			Blocks._mi(f, Blocks.torus_mesh(0.3, 0.36), Vector3(0, 0.06, 0), _glow(Color("#c05cff"), 3.0))
+			for x in [-0.34, 0.34]:
+				_cyl(f, 0.07, 0.07, 0.5, Vector3(x, -0.05, 0.3), steel, Vector3.ZERO, 10)
+				_cyl(rod, 0.04, 0.04, 1.0, Vector3(x, 0, 0.3), _m(CHROME, 0.95, 0.12), Vector3.ZERO, 8)
+			rr = 0.11
 		_:
 			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), body)
 			_box(f, Vector3(0.92, 0.08, 0.92), Vector3(0, -0.02, 0), dark)
@@ -848,6 +856,15 @@ static func _hinge(f: Node3D, def: Dictionary, col: Color) -> void:
 			dish.scale = Vector3(1, 0.4, 1)
 			_cyl(mv, 0.015, 0.015, 0.24, Vector3(0, -0.24, 0.26), dark, RX, 6)
 			Blocks._mi(mv, Blocks.sphere_mesh(0.035), Vector3(0, -0.24, 0.38), _glow(RED, 3.0))
+		"leg_servo":  # walker hip: drum motor on a vertical kingpin with a glowing ring
+			_box(f, Vector3(0.92, 0.22, 0.92), Vector3(0, -0.39, 0), body)
+			_cyl(f, 0.36, 0.4, 0.42, Vector3(0, -0.08, 0), dkm, Vector3.ZERO, 24)
+			Blocks._mi(f, Blocks.torus_mesh(0.36, 0.42), Vector3(0, 0.0, 0), _glow(Color("#c05cff"), 3.0))
+			for x in [-0.38, 0.38]:
+				_box(f, Vector3(0.12, 0.5, 0.44), Vector3(x, 0.2, 0), dkm)
+			_cyl(f, 0.1, 0.1, 0.98, Vector3(0, 0.42, 0), dark, RZ, 10)
+			_box(mv, Vector3(0.56, 0.26, 0.5), Vector3(0, -0.13, 0), steel)
+			_box(mv, Vector3(0.3, 0.06, 0.52), Vector3(0, -0.28, 0), _m(RED, 0.3, 0.4))
 		_:
 			_box(f, Vector3(0.9, 0.5, 0.9), Vector3(0, -0.22, 0), body)
 			for x in [-0.37, 0.37]:
