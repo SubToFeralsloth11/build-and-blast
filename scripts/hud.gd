@@ -42,6 +42,7 @@ var _pause: PanelContainer
 var _enemy_btn: Button
 var _cross: Crosshair
 var _ring: Label
+var _prompt: Label
 
 
 func setup() -> void:
@@ -110,6 +111,17 @@ func setup() -> void:
 	_cross.offset_bottom = 30
 	_cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_cross)
+	_prompt = UI.label("", 20, Color("#ffd23f"))
+	_prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_prompt.offset_left = -200
+	_prompt.offset_right = 200
+	_prompt.offset_top = 40
+	_prompt.offset_bottom = 70
+	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt.add_theme_constant_override("outline_size", 8)
+	_prompt.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_prompt)
 	_build_help()
 	_build_wreck()
 	_build_pause()
@@ -126,7 +138,8 @@ func _build_help() -> void:
 Arrows  pitch + roll      Q / E  yaw      Space / C  lift
 Shift  boost      Mouse  look + aim      LMB / RMB / G  fire
 1 2 3  toggles      4  trigger (TNT)      H  horn
-R  respawn      F  flip upright      V  camera mode
+R  respawn      F  flip upright      V  camera (chase / free / first person)
+X  get out / back in      On foot: WASD walk, Shift sprint, Space jump / swim up, V 1st / 3rd person
 Tab  back to garage      Esc  menu      F1  hide this""", 13, UI.TEXT)
 	_help.add_child(l)
 
@@ -208,6 +221,11 @@ func toggle_help() -> void:
 
 func hit_marker() -> void:
 	_cross.hit = 1.0
+
+
+## Context hint under the crosshair (e.g. "X: get in"); empty text hides it.
+func set_prompt(text: String) -> void:
+	_prompt.text = text
 
 
 func toast(text: String, col := Color.WHITE) -> void:

@@ -6,7 +6,13 @@ const BuilderUI := preload("res://scripts/builder_ui.gd")
 const Hud := preload("res://scripts/hud.gd")
 const World := preload("res://scripts/world.gd")
 const Vehicle := preload("res://scripts/vehicle.gd")
+const Player := preload("res://scripts/player.gd")
 const SimTest := preload("res://tools/sim_test.gd")
+
+enum { CAM_CHASE, CAM_FREE, CAM_FIRST }
+const CAM_NAMES := ["chase", "free orbit", "first person"]
+const SEAT_HEAD := Vector3(0, 0.55, 0.1)
+const ENTER_RANGE := 4.0
 
 var env: Environment
 var sun: DirectionalLight3D
@@ -17,6 +23,8 @@ var bui: Control
 var hud: Control
 var cam: Camera3D
 var vehicle: RigidBody3D
+## The pilot while walking around outside the vehicle; null while seated.
+var pilot: CharacterBody3D = null
 var design := {}
 var mode := "build"
 var location := "desert"
@@ -25,7 +33,10 @@ var paused := false
 var cam_yaw := 0.0
 var cam_pitch := -0.25
 var cam_dist := 12.0
-var cam_follow := true
+var cam_mode := CAM_CHASE
+var fp_yaw := 0.0
+var fp_pitch := 0.0
+var _prompt_on := false
 var _shake := 0.0
 var _veh_size := 3.0
 var _last_target := Vector3.ZERO
@@ -129,6 +140,7 @@ func _setup_env() -> void:
 
 func back_to_builder() -> void:
 	mode = "build"
+	_remove_pilot()
 	if vehicle and is_instance_valid(vehicle):
 		vehicle.queue_free()
 	vehicle = null
@@ -172,6 +184,7 @@ func start_test(loc: String) -> void:
 
 
 func _spawn_vehicle() -> void:
+	_remove_pilot()
 	if vehicle and is_instance_valid(vehicle):
 		vehicle.queue_free()
 	var info: Dictionary = world.spawn_info(location)
@@ -200,6 +213,9 @@ func _spawn_vehicle() -> void:
 	cam_dist = clampf(_veh_size * 2.4 + 6.0, 8.0, 40.0)
 	_last_target = vehicle.com_world()
 	cam.global_position = _last_target + Basis(Vector3.UP, cam_yaw) * Vector3(0, 3, cam_dist)
+	fp_yaw = 0.0
+	fp_pitch = 0.0
+	_sync_driver()
 
 
 func _on_wrecked() -> void:
@@ -232,7 +248,7 @@ func _set_paused(on: bool) -> void:
 	get_tree().paused = on
 	hud.set_paused(on)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
-	Controls.enabled = not on
+	Controls.enabled = not on and pilot == null
 	Power.interactive = not on
 
 
@@ -246,6 +262,88 @@ func _flip() -> void:
 	vehicle.angular_velocity = Vector3.ZERO
 	vehicle.linear_velocity = Vector3.ZERO
 	hud.toast("Flipped!")
+
+
+# ---------------------------------------------------------------- on foot
+
+func _seat_ok() -> bool:
+	return vehicle != null and is_instance_valid(vehicle) and vehicle.alive \
+		and vehicle.seat_idx >= 0 and vehicle.parts[vehicle.seat_idx].alive
+
+
+func _seat_transform() -> Transform3D:
+	var seat: Dictionary = vehicle.parts[vehicle.seat_idx]
+	return vehicle.global_transform * Transform3D(seat.basis, seat.pos)
+
+
+## Shows the little robot driver only while the pilot is seated and the camera is outside.
+func _sync_driver() -> void:
+	if not _seat_ok():
+		return
+	var d := (vehicle.parts[vehicle.seat_idx].node as Node3D).find_child("driver", true, false) as Node3D
+	if d:
+		d.visible = pilot == null and cam_mode != CAM_FIRST
+
+
+## Leaves the vehicle: the pilot appears on the ground beside it. Returns false when not possible.
+func exit_vehicle() -> bool:
+	if mode != "test" or pilot != null or vehicle == null or not is_instance_valid(vehicle):
+		return false
+	var com: Vector3 = vehicle.com_world() if vehicle.alive else _last_target
+	var side := vehicle.global_basis.x
+	side.y = 0.0
+	side = side.normalized() if side.length() > 0.1 else Vector3.RIGHT
+	var p := com + side * (_veh_size + 1.5)
+	var top := maxf(com.y, Fx.ground_height(p.x, p.z)) + _veh_size + 20.0
+	var excl: Array[RID] = [vehicle.get_rid()]
+	var q := PhysicsRayQueryParameters3D.create(Vector3(p.x, top, p.z), Vector3(p.x, -200.0, p.z),
+		Fx.L_WORLD | Fx.L_VEHICLE | Fx.L_PROPS | Fx.L_TARGET, excl)
+	var h := cam.get_world_3d().direct_space_state.intersect_ray(q)
+	p.y = h.position.y if not h.is_empty() else Fx.ground_height(p.x, p.z)
+	p.y = maxf(p.y, Fx.WATER - Player.FLOAT_DEPTH) + 0.05
+	pilot = Player.new()
+	pilot.name = "Pilot"
+	arena.add_child(pilot)
+	pilot.global_position = p
+	var f := -cam.global_basis.z
+	pilot.yaw = atan2(-f.x, -f.z)
+	Controls.enabled = false
+	vehicle.aim_point = Vector3.INF
+	_sync_driver()
+	hud.toast("X: get back in")
+	return true
+
+
+func _can_enter() -> bool:
+	if pilot == null or not _seat_ok():
+		return false
+	var at := pilot.global_position + Vector3(0, 1.0, 0)
+	return at.distance_to(_seat_transform().origin) < ENTER_RANGE \
+		or at.distance_to(vehicle.com_world()) < ENTER_RANGE + _veh_size
+
+
+## Climbs back into the seat. Returns false (with a hint) when too far or the vehicle is wrecked.
+func enter_vehicle() -> bool:
+	if pilot == null:
+		return false
+	if not _can_enter():
+		hud.toast("Vehicle wrecked - R to respawn" if not _seat_ok() else "Too far from your vehicle", Color("#ffcc00"))
+		return false
+	cam_yaw = pilot.yaw
+	_remove_pilot()
+	return true
+
+
+func _remove_pilot() -> void:
+	if pilot == null:
+		return
+	if is_instance_valid(pilot):
+		pilot.queue_free()
+	pilot = null
+	_prompt_on = false
+	hud.set_prompt("")
+	Controls.enabled = mode == "test" and not paused
+	_sync_driver()
 
 
 # ---------------------------------------------------------------- input
@@ -276,19 +374,40 @@ func _unhandled_input(e: InputEvent) -> void:
 				if not paused:
 					_flip()
 			KEY_V:
-				cam_follow = not cam_follow
-				hud.toast("Camera: %s" % ("chase" if cam_follow else "free orbit"))
+				if pilot:
+					pilot.set_first_person(not pilot.first_person)
+					hud.toast("Camera: %s" % ("first person" if pilot.first_person else "over the shoulder"))
+				else:
+					cam_mode = (cam_mode + 1) % CAM_NAMES.size()
+					fp_yaw = 0.0
+					fp_pitch = 0.0
+					_sync_driver()
+					hud.toast("Camera: %s" % CAM_NAMES[cam_mode])
+			KEY_X:
+				if not paused:
+					if pilot:
+						enter_vehicle()
+					else:
+						exit_vehicle()
 			KEY_F1:
 				hud.toggle_help()
 	elif e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var mm := e as InputEventMouseMotion
-		cam_yaw -= mm.relative.x * 0.0035
-		cam_pitch = clampf(cam_pitch - mm.relative.y * 0.0035, -1.3, 0.9)
+		if pilot:
+			pilot.look(mm.relative)
+		elif cam_mode == CAM_FIRST:
+			fp_yaw = clampf(fp_yaw - mm.relative.x * 0.0035, deg_to_rad(-100.0), deg_to_rad(100.0))
+			fp_pitch = clampf(fp_pitch - mm.relative.y * 0.0035, deg_to_rad(-80.0), deg_to_rad(80.0))
+		else:
+			cam_yaw -= mm.relative.x * 0.0035
+			cam_pitch = clampf(cam_pitch - mm.relative.y * 0.0035, -1.3, 0.9)
 		_mouse_idle = 0.0
 	elif e is InputEventMouseButton and e.is_pressed():
 		var mb := e as InputEventMouseButton
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not paused:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		if pilot != null or cam_mode == CAM_FIRST:
+			return
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
 			cam_dist = maxf(4.0, cam_dist * 0.9)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -300,8 +419,21 @@ func _unhandled_input(e: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if mode != "test" or paused:
 		return
+	if pilot:
+		_update_pilot()
 	_update_camera(delta)
 	_update_stats(delta)
+
+
+func _update_pilot() -> void:
+	if pilot.global_position.y < -40.0:
+		hud.toast("Lost the pilot. Respawning...", Color("#3fa9ff"))
+		_spawn_vehicle()
+		return
+	var near := _can_enter()
+	if near != _prompt_on:
+		_prompt_on = near
+		hud.set_prompt("X: get in" if near else "")
 
 
 func _update_camera(delta: float) -> void:
@@ -313,26 +445,42 @@ func _update_camera(delta: float) -> void:
 		_last_target = target
 	_mouse_idle += delta
 	var speed := vehicle.linear_velocity.length() if vehicle.alive else 0.0
-	if cam_follow and vehicle.alive and speed > 4.0 and _mouse_idle > 1.2:
-		var v := vehicle.linear_velocity
-		var heading := atan2(-v.x, -v.z)
-		cam_yaw = rotate_toward(cam_yaw, heading, delta * 1.6 * clampf((speed - 4.0) / 10.0, 0.0, 1.0))
-	var look := target + Vector3(0, _veh_size * 0.35 + 0.8, 0)
-	var off := Vector3(0, 0, cam_dist).rotated(Vector3.RIGHT, cam_pitch).rotated(Vector3.UP, cam_yaw)
-	var want := look + off
-	var gh := maxf(Fx.ground_height(want.x, want.z), Fx.WATER - 0.2)
-	want.y = maxf(want.y, gh + 1.2)
-	cam.global_position = cam.global_position.lerp(want, clampf(delta * 14.0, 0.0, 1.0))
-	if cam.global_position.distance_to(look) > 0.1:
-		cam.look_at(look, Vector3.UP)
-	cam.fov = lerpf(cam.fov, 70.0 + clampf(speed / 4.0, 0.0, 18.0), delta * 3.0)
+	var close := pilot != null or (cam_mode == CAM_FIRST and _seat_ok())
+	var near_plane := 0.05 if close else 0.1
+	if cam.near != near_plane:
+		cam.near = near_plane
+	if pilot:
+		_place_pilot_camera()
+		cam.fov = lerpf(cam.fov, 75.0, delta * 3.0)
+	elif close:
+		var st := _seat_transform()
+		var look := Basis.from_euler(Vector3(fp_pitch, fp_yaw, 0.0))
+		cam.global_transform = Transform3D(st.basis.orthonormalized() * look, st * SEAT_HEAD)
+		cam.fov = lerpf(cam.fov, 75.0 + clampf(speed / 5.0, 0.0, 12.0), delta * 3.0)
+	else:
+		if cam_mode == CAM_CHASE and vehicle.alive and speed > 4.0 and _mouse_idle > 1.2:
+			var v := vehicle.linear_velocity
+			var heading := atan2(-v.x, -v.z)
+			cam_yaw = rotate_toward(cam_yaw, heading, delta * 1.6 * clampf((speed - 4.0) / 10.0, 0.0, 1.0))
+		var look := target + Vector3(0, _veh_size * 0.35 + 0.8, 0)
+		var off := Vector3(0, 0, cam_dist).rotated(Vector3.RIGHT, cam_pitch).rotated(Vector3.UP, cam_yaw)
+		var want := look + off
+		var gh := maxf(Fx.ground_height(want.x, want.z), Fx.WATER - 0.2)
+		want.y = maxf(want.y, gh + 1.2)
+		cam.global_position = cam.global_position.lerp(want, clampf(delta * 14.0, 0.0, 1.0))
+		if cam.global_position.distance_to(look) > 0.1:
+			cam.look_at(look, Vector3.UP)
+		cam.fov = lerpf(cam.fov, 70.0 + clampf(speed / 4.0, 0.0, 18.0), delta * 3.0)
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 2.5)
-		cam.h_offset = randf_range(-1, 1) * _shake * 0.4
-		cam.v_offset = randf_range(-1, 1) * _shake * 0.4
+		var k := 0.12 if close else 0.4
+		cam.h_offset = randf_range(-1, 1) * _shake * k
+		cam.v_offset = randf_range(-1, 1) * _shake * k
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+	if pilot:
+		return
 	# aim point under the crosshair
 	var from := cam.global_position
 	var dir := -cam.global_basis.z
@@ -340,6 +488,23 @@ func _update_camera(delta: float) -> void:
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 1500.0, Fx.MASK_SHOT, excl)
 	var h := cam.get_world_3d().direct_space_state.intersect_ray(q)
 	vehicle.aim_point = h.position if not h.is_empty() else from + dir * 900.0
+
+
+## First person at eye height, or over the right shoulder pulled in front of walls.
+func _place_pilot_camera() -> void:
+	var eye: Vector3 = pilot.eye_position()
+	var b := Basis.from_euler(Vector3(pilot.pitch, pilot.yaw, 0.0))
+	if pilot.first_person:
+		cam.global_transform = Transform3D(b, eye)
+		return
+	var want := eye + b * Vector3(0.55, 0.3, 2.6)
+	var excl: Array[RID] = [pilot.get_rid()]
+	var q := PhysicsRayQueryParameters3D.create(eye, want, Fx.L_WORLD | Fx.L_VEHICLE | Fx.L_PROPS | Fx.L_TARGET, excl)
+	var h := cam.get_world_3d().direct_space_state.intersect_ray(q)
+	if not h.is_empty():
+		want = h.position + (eye - want).normalized() * 0.2
+	want.y = maxf(want.y, Fx.ground_height(want.x, want.z) + 0.3)
+	cam.global_transform = Transform3D(b, want)
 
 
 func _update_stats(delta: float) -> void:
@@ -375,7 +540,7 @@ func _update_stats(delta: float) -> void:
 	if rp != Vector3.INF and (location == "runway" or location == "sky" or com.y > 40.0):
 		rd = com.distance_to(rp)
 	hud.update({
-		"name": design.get("name", ""), "speed": speed, "alt": com.y, "agl": maxf(_agl, 0.0),
+		"name": design.get("name", ""), "speed": pilot.velocity.length() if pilot else speed, "alt": com.y, "agl": maxf(_agl, 0.0),
 		"intact": vehicle.intact(), "score": score, "targets": targets, "top_speed": top_speed,
 		"max_alt": max_alt, "best_air": best_air, "best_lap": best_lap, "ring_dist": rd, "ring_idx": world.ring_index,
 	})
