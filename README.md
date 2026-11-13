@@ -14,13 +14,19 @@ Open the folder in Godot 4.7 and press Play, or run `godot --path .`
 | Right click / right drag | Delete a block / orbit the camera |
 | Middle drag / middle click | Pan / pick up the hovered block type |
 | Mouse wheel | Zoom |
-| R / T / F (Shift reverses) | Rotate the block around Y / X / Z |
+| R / T / F (Shift reverses) | Rotate the block around Y / X / Z, 45 degrees per press |
+| G | Switch the rotation step between 45 and 90 degrees |
+| [ / ] | Shrink / grow the next structure block (all sides) |
 | M | Toggle mirror building |
 | B / P / C | Build / Paint / Configure tool |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Enter | Test drive at the last location |
 
 In the garage, a yellow marker shows the centre of mass and a blue marker shows the centre of lift. Blocks that are not connected to the seat turn red, and they fall off when you test the vehicle. The bottom bar shows mass, thrust-to-weight, an estimated takeoff speed, lift and whether the vehicle floats.
+
+New blocks snap flush against the face you point at, so they sit right on top of half blocks and plates, against sideways half blocks, along the sides of resized blocks, and against blocks turned 45 degrees (they line up with the turned block). On a long face, a block slides along it in whole-block steps (half-block steps for blocks smaller than 1).
+
+**Sizes:** every Structure block except the pilot seat can be 0.25 to 8 blocks along each side, in 0.25 steps. Set the size before placing with the Width/Height/Length buttons in the right panel or [ / ], or select a placed block with Configure to resize it (it grows around its centre). Mass, armor and buoyancy scale with volume. Mechanical parts, wheels, engines, weapons and gadgets keep their size.
 
 **Configure** sets each engine, weapon, mechanism or gadget's control (any of 16 channels), inverts it, and sets its power from 25% to 200%. You can also set the steering mode (including tank steering) and drive for each wheel, and the movement mode for pistons and hinges. **Apply to all** copies a block's settings to every block of the same type.
 
@@ -37,9 +43,11 @@ In the garage, a yellow marker shows the centre of mass and a blue marker shows 
 | Left / Right mouse, G | Fire 1 / 2 / 3 |
 | 1 2 3 | Toggles (magnet, parachute, lights) |
 | 4 | Trigger (TNT) |
-| H | Horn |
-| R / F / V | Respawn / flip upright / switch between chase and free camera |
+| R / F / V | Respawn / flip upright / camera: chase, free orbit, first person |
+| X | Get out of the vehicle / get back in (stand within about 4 m of it) |
 | Tab / Esc / F1 | Back to the garage / pause menu / hide the help |
+
+On foot: WASD to walk, Shift to sprint, Space to jump (and to swim up in water), mouse to look, V switches first and third person. While you are out, the vehicle gets no driving input, but toggles you switched on stay on. R puts you back in the seat of a fresh vehicle.
 
 ## Blocks (245)
 
