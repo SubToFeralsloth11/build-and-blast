@@ -784,7 +784,8 @@ func _wheel(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physic
 		if drives and absf(wthr) < 0.05 and absf(vf) < 2.0:
 			lon -= vf * share / delta * 0.25
 		var f := sg * lat + fg * lon
-		var grip: float = load * 1.3 * float(def.get("grip", 1.0))
+		# paved surfaces (race track, runways, carrier deck) carry a "grip" multiplier
+		var grip: float = load * 1.3 * float(def.get("grip", 1.0)) * float(h.collider.get_meta("grip", 1.0))
 		if f.length() > grip:
 			f = f.normalized() * grip
 		apply_force(f, h.position + up * rad * 0.6 - global_position)

@@ -26,6 +26,9 @@ const TRACK_FLAT := TRACK_W * 0.5 + 10.0    # terrain is level this far from the
 const TRACK_BLEND := 26.0                   # then blends back into the dunes over this distance
 ## Aircraft carrier: stationary, bow toward -Z. Deck centre line is CARRIER.x.
 const CARRIER := Vector3(780, 0, -170)   # clear of the harbor boat lane (boats spawn at x 340, z 20 heading +X)
+## Traction multipliers that wheels read from the surface they touch (meta "grip").
+const TRACK_GRIP := 1.6
+const AIRSTRIP_GRIP := 1.4
 const DECK_Y := 18.0
 const DECK_LEN := 290.0
 const DECK_W := 64.0
@@ -302,6 +305,15 @@ void fragment() {
 
 # ---------------------------------------------------------------- static helpers
 
+## Paved surface: wheels get `grip` times their traction on it, and sliding
+## bodies (belly landings, debris) get the same extra friction.
+func _grippy(b: StaticBody3D, grip: float) -> void:
+	b.set_meta("grip", grip)
+	var pm := PhysicsMaterial.new()
+	pm.friction = grip
+	b.physics_material_override = pm
+
+
 func _static_box(pos: Vector3, size: Vector3, col: Color, rot := Vector3.ZERO, shader := true) -> StaticBody3D:
 	var b := StaticBody3D.new()
 	b.collision_layer = Fx.L_WORLD
@@ -363,6 +375,7 @@ func _build_runway() -> void:
 	var y := RUNWAY_H + 0.05
 	var b := _static_box(Vector3(RUNWAY_X, y - 0.5, 0), Vector3(40, 1.0, 700), Color("#3a3d42"), Vector3.ZERO, false)
 	b.name = "Runway"
+	_grippy(b, AIRSTRIP_GRIP)
 	for z in range(-330, 340, 30):
 		Blocks._mi(b, Blocks.box_mesh(Vector3(1.0, 0.04, 14)), Vector3(0, 0.51, z), Blocks.mat(Color.WHITE, 0, 0.6))
 	for x in [-18.5, 18.5]:
@@ -795,6 +808,7 @@ func _build_track() -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var road := StaticBody3D.new()
 	road.name = "RaceTrack"
+	_grippy(road, TRACK_GRIP)
 	road.collision_layer = Fx.L_WORLD
 	road.collision_mask = 0
 	add_child(road)
@@ -990,6 +1004,7 @@ func _build_carrier() -> void:
 	var yellow := Color("#ffcc00")
 	var body := StaticBody3D.new()
 	body.name = "Carrier"
+	_grippy(body, AIRSTRIP_GRIP)
 	body.collision_layer = Fx.L_WORLD
 	body.collision_mask = 0
 	add_child(body)
