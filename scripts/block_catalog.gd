@@ -111,8 +111,23 @@ static func _wheels(B: Node) -> void:
 		["ski", "Ski", 10, 60, "#e53935", "Slides on sand. No power, almost no drag.", {"vis": "ski", "radius": 0.2, "travel": 0.3, "drive": 0.0, "roll": 0.0, "lat": 0.25, "grip": 0.6, "cfg": free}],
 		["rally", "Rally Wheel", 38, 130, "#3fa9ff", "Balanced grip, travel and speed.", {"radius": 0.5, "travel": 0.5, "drive": 1350.0, "grip": 1.3, "vmax": 54.0}],
 		["classic", "Whitewall Wheel", 34, 110, "#e0e6ee", "Old-school cruiser style.", {"radius": 0.45, "whitewall": true, "drive": 1100.0}],
-		["hubmotor", "Hub Motor Wheel", 45, 120, "#39e1ff", "Electric in-wheel motor. Instant torque.", {"radius": 0.4, "drive": 2400.0, "vmax": 36.0, "glowrim": true}],
+		["hubmotor", "Hub Motor Wheel", 45, 120, "#39e1ff", "Electric in-wheel motor (40 kW each). Drives itself, no engine needed.", {"radius": 0.4, "drive": 2400.0, "vmax": 36.0, "glowrim": true, "kw": 40.0}],
 		["skate", "Skate Wheel", 5, 30, "#ffcc00", "Tiny roller. Sits very low.", {"radius": 0.2, "travel": 0.15, "drive": 400.0}],
+	])
+	# Engines power every driven wheel (except hub motors). Power is shared by all
+	# driven wheels; `v0` is the speed (m/s) up to which full pulling force is
+	# available, so a higher v0 means more shove from a standstill.
+	_many(B, "Wheels", {"kind": "motor", "vis": "motor", "cfg": {"pow": 100}, "buoy": 0.05}, [
+		["mower_engine", "Mower Engine", 18, 60, "#e53935", "Tiny single cylinder (9 kW). Gets a go-kart rolling, not much more.", {"kw": 9.0, "cyls": 1, "style": "single"}],
+		["i4_engine", "Inline-4", 55, 140, "#9aa4b1", "Everyday four-cylinder (60 kW). Fine for a light buggy.", {"kw": 60.0, "cyls": 4, "style": "inline"}],
+		["turbo4_engine", "Turbo Four", 65, 150, "#3fa9ff", "Four-cylinder with a turbo (115 kW). Punchy for its weight.", {"kw": 115.0, "cyls": 4, "style": "inline", "turbo": true}],
+		["v6_engine", "V6", 95, 200, "#ffcc00", "Smooth V6 (160 kW). A good all-rounder for cars and trucks.", {"kw": 160.0, "cyls": 6, "style": "v"}],
+		["diesel_engine", "Diesel Engine", 210, 320, "#5c6b4a", "Heavy inline-6 diesel (200 kW). Huge pulling force at low speed for tanks and trucks.", {"kw": 200.0, "v0": 9.0, "cyls": 6, "style": "inline", "turbo": true}],
+		["electric_motor", "Electric Motor", 70, 160, "#39e1ff", "Silent motor (150 kW) with full force from a standstill.", {"kw": 150.0, "v0": 12.0, "style": "electric"}],
+		["v8_engine", "V8", 150, 260, "#e53935", "Big rumbling V8 with a blower (250 kW). Serious muscle.", {"kw": 250.0, "cyls": 8, "style": "v", "blower": true}],
+		["v12_engine", "V12", 230, 320, "#b98cff", "Twelve cylinders of luxury power (400 kW).", {"kw": 400.0, "cyls": 12, "style": "v"}],
+		["v10_engine", "Racing V10", 170, 220, "#ff7a2f", "Screaming race engine (560 kW). Light and very powerful.", {"kw": 560.0, "v0": 4.0, "cyls": 10, "style": "v"}],
+		["turbine_engine", "Turbine Drive", 320, 300, "#59616c", "Gas turbine on a drive shaft (950 kW). Absurd power.", {"kw": 950.0, "style": "turbine"}],
 	])
 
 

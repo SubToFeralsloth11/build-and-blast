@@ -599,12 +599,19 @@ func _on_changed() -> void:
 		parts.append("Lift %d%%" % int(s.lift_max / (s.mass * 9.8) * 100.0))
 	if s.wheels > 0:
 		parts.append("Wheels %d" % s.wheels)
+	var kw: float = s.engine_kw + s.hub_kw
+	if kw > 0.0:
+		parts.append("Engine %d kW (%d kW/t)" % [int(kw), int(kw / maxf(s.mass / 1000.0, 0.05))])
 	if s.weapons > 0:
 		parts.append("Weapons %d" % s.weapons)
 	parts.append("Floats" if s.floats > s.mass * 9.8 else "Sinks")
 	var txt := "   ".join(parts)
+	var bad: bool = s.loose > 0
 	if s.loose > 0:
 		txt += "   |   %d loose blocks will fall off!" % s.loose
+	if s.driven > 0 and s.engine_kw <= 0.0:
+		txt += "   |   No engine: driven wheels won't turn (add one from Wheels)"
+		bad = true
 	_stats.text = txt
-	_stats.add_theme_color_override("font_color", UI.BAD if s.loose > 0 else UI.TEXT)
+	_stats.add_theme_color_override("font_color", UI.BAD if bad else UI.TEXT)
 	_rebuild_right()

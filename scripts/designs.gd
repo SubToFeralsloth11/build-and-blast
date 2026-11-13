@@ -55,11 +55,11 @@ class DB:
 
 func presets() -> Array:
 	var out := []
-	out.append(_car({"name": "Starter Buggy", "len": 5, "hw": 1, "scheme": ["#3fa9ff", "#2b2f36"], "gadgets": ["light", "horn"]}))
-	out.append(_car({"name": "Battle Buggy", "len": 5, "hw": 1, "scheme": ["#ffcc00", "#2b2f36"], "weapons": ["mg", "mg"], "gadgets": ["jump", "smoke", "light"]}))
-	out.append(_car({"name": "Monster Masher", "len": 6, "hw": 1, "big": true, "scheme": ["#3ddc84", "#1d3b2a"], "gadgets": ["jump", "light", "horn"], "rockets": 1, "weapons": ["flamer"]}))
-	out.append(_car({"name": "Iron Rhino Tank", "len": 7, "hw": 1, "armor": true, "six": true, "scheme": ["#5c6b4a", "#2b2f36"], "weapons": ["cannon", "turret"], "gadgets": ["light", "tnt"]}))
-	out.append(_car({"name": "Nitro Rocket Car", "len": 6, "hw": 1, "scheme": ["#e53935", "#f2f2f2"], "rockets": 2, "spoiler": true, "gadgets": ["parachute", "smoke"]}))
+	out.append(_car({"name": "Starter Buggy", "len": 5, "hw": 1, "scheme": ["#3fa9ff", "#2b2f36"], "gadgets": ["light", "horn"], "engine": "i4_engine"}))
+	out.append(_car({"name": "Battle Buggy", "len": 5, "hw": 1, "scheme": ["#ffcc00", "#2b2f36"], "weapons": ["mg", "mg"], "gadgets": ["jump", "smoke", "light"], "engine": "turbo4_engine"}))
+	out.append(_car({"name": "Monster Masher", "len": 6, "hw": 1, "big": true, "scheme": ["#3ddc84", "#1d3b2a"], "gadgets": ["jump", "light", "horn"], "rockets": 1, "weapons": ["flamer"], "engine": "v8_engine"}))
+	out.append(_car({"name": "Iron Rhino Tank", "len": 7, "hw": 1, "armor": true, "six": true, "scheme": ["#5c6b4a", "#2b2f36"], "weapons": ["cannon", "turret"], "gadgets": ["light", "tnt"], "engine": "diesel_engine"}))
+	out.append(_car({"name": "Nitro Rocket Car", "len": 6, "hw": 1, "scheme": ["#e53935", "#f2f2f2"], "rockets": 2, "spoiler": true, "gadgets": ["parachute", "smoke"], "engine": "v10_engine"}))
 	out.append(_plane({"name": "Sky Sparrow", "engine": "prop", "span": 4, "rows": 1, "nose": 2, "tail": 3, "scheme": ["#f2f2f2", "#e53935"], "weapons": ["mg", "mg"], "gadgets": ["smoke"]}))
 	out.append(_plane({"name": "Thunder Jet", "engine": "jet2", "span": 4, "rows": 2, "nose": 3, "tail": 3, "scheme": ["#59616c", "#ffcc00"], "weapons": ["mg", "mg", "rockets", "rockets"], "gadgets": []}))
 	out.append(_plane({"name": "Bomber Pelican", "engine": "prop2", "span": 5, "rows": 2, "nose": 2, "tail": 4, "scheme": ["#8d6e63", "#3ddc84"], "weapons": ["turret"], "bombs": 2, "gadgets": ["parachute"]}))
@@ -103,6 +103,8 @@ func _car(o: Dictionary) -> Dictionary:
 		for x in range(-hw, hw + 1):
 			b.add(mat, x, y, z, 0, col)
 	b.put("seat", 0, y, 0)
+	# engine in the middle of the rear row; it powers every driven wheel
+	b.put(o.get("engine", "i4_engine"), 0, y, z1, 0, acc)
 	for x in range(-hw, hw + 1):
 		b.add("wedge", x, y, z0 - 1, 0, acc if mat == "armor" else col)
 	# wheels
@@ -236,9 +238,9 @@ func _plane_at(o: Dictionary, wz: int) -> Dictionary:
 	var fin := Blocks.rot_toward(Vector3.FORWARD, Vector3.RIGHT)
 	b.add("flap", 0, 1, tail, fin, acc)
 	b.add("wing", 0, 1, tail - 1, fin, col)
-	# landing gear
-	b.add("wheel", 0, -1, -nose)
-	b.sym("wheel", 1, -1, wz)
+	# landing gear: free-rolling, the propellers or jets do the pushing
+	b.add("wheel", 0, -1, -nose, 0, "", {"steer": "auto", "drive": false, "pow": 100})
+	b.sym("wheel", 1, -1, wz, 0, "", {"steer": "off", "drive": false, "pow": 100})
 	# weapons
 	var slots := _slots(b, [Vector3i(1, 0, -nose), Vector3i(-1, 0, -nose), Vector3i(3, -1, wz), Vector3i(-3, -1, wz), Vector3i(0, 1, -1), Vector3i(0, -1, 1)])
 	for w in o.get("weapons", []):
@@ -366,6 +368,7 @@ func _barge() -> Dictionary:
 		for x in range(-2, 3):
 			b.add("wood", x, 0, z, 0, "#a1887f")
 	b.put("seat", 0, 0, 0)
+	b.put("mower_engine", 0, 0, 2, 0, "")
 	for p in [Vector3i(2, 1, 2), Vector3i(2, 1, -2)]:
 		b.sym("balloon", p.x, p.y, p.z, 0, "#ff4f6d")
 	b.add("balloon", 0, 1, 0, 0, "#ffcc00")
@@ -403,6 +406,7 @@ func _crane() -> Dictionary:
 	b.sym("beacon", 1, 1, -2, 0, "")
 	b.sym("light", 1, 1, -3)
 	b.put("ballast", 0, 0, 2, 0, "")
+	b.put("diesel_engine", 0, 0, 3, 0, acc)
 	return b.done("Mega Crane")
 
 
@@ -426,6 +430,7 @@ func _lowrider() -> Dictionary:
 	b.sym("underglow", 1, -1, -1, 0, "#ff5ec4")
 	b.sym("brakelight", 1, 1, 2)
 	b.add("horn", 0, 1, -2)
+	b.put("v8_engine", 0, 0, 2, 0, "#2b2f36")
 	b.add("spoiler", 0, 1, 2, Blocks.rot_toward(Vector3.FORWARD, Vector3.DOWN), "#2b2f36")
 	return b.done("Bouncy Lowrider")
 
@@ -692,9 +697,14 @@ func random_design() -> Dictionary:
 					o["susp"] = SUSPENSIONS.pick_random()
 			elif randf() < 0.3:
 				o["wheel"] = "tractor"
+			var armored := randf() < 0.25
+			# heavy builds get heavy engines so every random car can actually drive
+			var engines := ["diesel_engine", "v8_engine", "v12_engine"] if armored or big \
+				else ["turbo4_engine", "v6_engine", "v6_engine", "diesel_engine", "electric_motor", "v8_engine", "v12_engine", "v10_engine"]
 			o.merge({"name": nm, "len": randi_range(4, 7), "hw": randi_range(1, 2), "big": big,
-				"armor": randf() < 0.25, "six": randf() < 0.3, "scheme": scheme, "weapons": wpn, "gadgets": g,
-				"rockets": randi_range(0, 2) if randf() < 0.4 else 0, "spoiler": randf() < 0.4})
+				"armor": armored, "six": randf() < 0.3, "scheme": scheme, "weapons": wpn, "gadgets": g,
+				"rockets": randi_range(0, 2) if randf() < 0.4 else 0, "spoiler": randf() < 0.4,
+				"engine": engines.pick_random()})
 			return _car(o)
 		"plane":
 			var eng: String = ["prop", "prop2", "jet", "jet2", "thruster"].pick_random()
@@ -757,7 +767,8 @@ func connected(blocks: Array) -> Dictionary:
 
 func stats(d: Dictionary) -> Dictionary:
 	var s := {"blocks": 0, "mass": 0.0, "thrust": 0.0, "wings": 0, "weapons": 0, "wheels": 0, "floats": 0.0,
-		"lift_max": 0.0, "com": Vector3.ZERO, "col": Vector3.ZERO, "has_seat": false, "loose": 0}
+		"lift_max": 0.0, "com": Vector3.ZERO, "col": Vector3.ZERO, "has_seat": false, "loose": 0,
+		"engine_kw": 0.0, "hub_kw": 0.0, "driven": 0}
 	var com := Vector3.ZERO
 	var col := Vector3.ZERO
 	for b in d.blocks:
@@ -790,6 +801,14 @@ func stats(d: Dictionary) -> Dictionary:
 					col += Blocks.center_of(b)
 			"wheel":
 				s.wheels += 1
+				var cfg: Dictionary = def.cfg.duplicate()
+				cfg.merge(b.get("cfg", {}), true)
+				if def.has("kw"):
+					s.hub_kw += def.kw * cfg.get("pow", 100) / 100.0
+				elif cfg.get("drive", true) and def.get("drive", 0.0) > 0.0:
+					s.driven += 1
+			"motor":
+				s.engine_kw += def.kw * b.get("cfg", {}).get("pow", 100) / 100.0
 			"seat":
 				s.has_seat = true
 	if s.mass > 0:

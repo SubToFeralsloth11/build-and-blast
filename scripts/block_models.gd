@@ -121,6 +121,8 @@ static func build(r: Node3D, def: Dictionary, col: Color) -> bool:
 			_susp(_frame(r, def), def, col)
 		"decoupler":
 			_decoupler(r, col)
+		"motor":
+			_motor(r, def, col)
 		# ------------------------------------------------ propulsion
 		"ion":
 			var gc := Color(def.get("glow", "#5fd0ff"))
@@ -572,6 +574,75 @@ static func build(r: Node3D, def: Dictionary, col: Color) -> bool:
 const CHROME := Color("#e8edf2")
 const HOSE := Color("#2a2d33")
 const RED := Color("#e53935")
+
+## Wheel engine. Shape follows the style (single, inline, V, electric, turbine);
+## the front pulley/fan is the `spin` node vehicle.gd turns with the throttle.
+static func _motor(r: Node3D, def: Dictionary, col: Color) -> void:
+	var style: String = def.get("style", "inline")
+	var cyls: int = def.get("cyls", 4)
+	var dark := _m(DARK, 0.4, 0.5)
+	var metal := _m(STEEL, 0.75, 0.3)
+	var body := _m(col, 0.45, 0.4)
+	var cover := _m(col.lightened(0.25), 0.5, 0.3)
+	var plug := _m(Color("#e53935"), 0.2, 0.5)
+	_box(r, Vector3(0.92, 0.12, 0.92), Vector3(0, -0.44, 0), dark)
+	match style:
+		"single":
+			_box(r, Vector3(0.46, 0.36, 0.46), Vector3(0, -0.2, 0.05), body)
+			_cyl(r, 0.15, 0.17, 0.4, Vector3(0, 0.16, 0.05), metal, Vector3.ZERO, 14)
+			for i in 4:
+				_cyl(r, 0.24, 0.24, 0.03, Vector3(0, 0.02 + i * 0.08, 0.05), metal, Vector3.ZERO, 14)
+			Blocks._mi(r, Blocks.sphere_mesh(0.05), Vector3(0, 0.4, 0.05), plug)
+			_cyl(r, 0.2, 0.2, 0.06, Vector3(-0.27, -0.15, 0.05), _m(Color("#e53935"), 0.2, 0.5), RZ, 18)
+			_cyl(r, 0.05, 0.05, 0.5, Vector3(0.26, 0.05, 0.2), metal, RX, 8)
+		"inline":
+			_box(r, Vector3(0.5, 0.42, 0.86), Vector3(0, -0.15, 0), body)
+			_box(r, Vector3(0.44, 0.14, 0.82), Vector3(0, 0.13, 0), cover)
+			for i in cyls:
+				var z := -0.32 + 0.64 * (i + 0.5) / cyls
+				Blocks._mi(r, Blocks.sphere_mesh(0.04), Vector3(0, 0.22, z), plug)
+				_cyl(r, 0.035, 0.035, 0.18, Vector3(0.3, 0.0, z), metal, RZ, 8)
+			_cyl(r, 0.06, 0.06, 0.8, Vector3(0.39, 0.0, 0.0), metal, RX, 10)
+			_box(r, Vector3(0.12, 0.2, 0.7), Vector3(-0.32, 0.0, 0.0), dark)
+			if def.get("turbo", false):
+				Blocks._mi(r, Blocks.torus_mesh(0.07, 0.16), Vector3(0.36, 0.2, 0.32), metal, RZ)
+				_cyl(r, 0.08, 0.08, 0.12, Vector3(0.36, 0.2, 0.32), dark, RZ, 12)
+		"v":
+			_box(r, Vector3(0.56, 0.32, 0.86), Vector3(0, -0.22, 0), body)
+			for sx in [-1.0, 1.0]:
+				var bank := Node3D.new()
+				r.add_child(bank)
+				bank.position = Vector3(sx * 0.16, 0.0, 0)
+				bank.rotation.z = -sx * 0.6
+				_box(bank, Vector3(0.26, 0.32, 0.84), Vector3(0, 0.0, 0), body)
+				_box(bank, Vector3(0.24, 0.1, 0.82), Vector3(0, 0.2, 0), cover)
+				var n := maxi(1, cyls / 2)
+				for i in n:
+					var z := -0.32 + 0.64 * (i + 0.5) / n
+					Blocks._mi(bank, Blocks.sphere_mesh(0.035), Vector3(0, 0.27, z), plug)
+				_cyl(r, 0.05, 0.05, 0.8, Vector3(sx * 0.43, -0.12, 0), metal, RX, 10)
+			_box(r, Vector3(0.2, 0.14, 0.7), Vector3(0, 0.16, 0), dark)
+			if def.get("blower", false):
+				_box(r, Vector3(0.3, 0.2, 0.42), Vector3(0, 0.32, 0.02), metal)
+				_box(r, Vector3(0.24, 0.12, 0.22), Vector3(0, 0.47, -0.02), _m(DARK, 0.2, 0.6))
+		"electric":
+			_cyl(r, 0.36, 0.36, 0.78, Vector3(0, -0.02, 0.02), body, RX, 24)
+			for i in 6:
+				Blocks._mi(r, Blocks.torus_mesh(0.35, 0.41), Vector3(0, -0.02, -0.28 + i * 0.12), dark, RX)
+			_box(r, Vector3(0.32, 0.12, 0.34), Vector3(0, 0.38, 0.12), dark)
+			_box(r, Vector3(0.22, 0.03, 0.2), Vector3(0, 0.45, 0.12), _glow(Color("#39e1ff"), 2.5))
+		"turbine":
+			_cyl(r, 0.32, 0.42, 0.9, Vector3(0, -0.02, 0), body, RX, 22)
+			Blocks._mi(r, Blocks.torus_mesh(0.3, 0.43), Vector3(0, -0.02, -0.44), metal, RX)
+			_cyl(r, 0.22, 0.22, 0.02, Vector3(0, -0.02, 0.46), _glow(Color("#ff6a2a"), 2.5), RX, 16)
+			for i in 3:
+				_cyl(r, 0.4 - i * 0.03, 0.4 - i * 0.03, 0.04, Vector3(0, -0.02, -0.2 + i * 0.22), dark, RX, 22)
+	# front pulley and fan, turned by vehicle.gd
+	var spin := Blocks._node(r, "spin", Vector3(0, -0.05, -0.47))
+	_cyl(spin, 0.12, 0.12, 0.05, Vector3.ZERO, metal, RX, 14)
+	if style != "electric" and style != "turbine":
+		for a in 4:
+			_box(spin, Vector3(0.05, 0.3, 0.02), Vector3.ZERO, dark, Vector3(0, 0, a * PI * 0.25 + 0.3))
 
 
 ## Ring of `n` studs around the local Y axis.

@@ -67,6 +67,7 @@ func _simtest(args: PackedStringArray) -> void:
 	if "--worldtest" in args:
 		fails += await _world_test()
 		fails += await _missile_test()
+		fails += await _engine_test()
 		print("SIMTEST DONE fails=%d" % fails)
 		return
 	for d in list:
@@ -91,6 +92,7 @@ func _simtest(args: PackedStringArray) -> void:
 	fails += _builder_test()
 	fails += await _world_test()
 	fails += await _missile_test()
+	fails += await _engine_test()
 	print("SIMTEST DONE fails=%d" % fails)
 
 
@@ -153,6 +155,40 @@ func _world_test() -> int:
 	f += _wcheck(not seen.has("race_lap"), "skipping the sectors gives no lap %s" % [seen])
 	main.back_to_builder()
 	await _frames(2)
+	return f
+
+
+## The same buggy with no engine, the weakest, a mid and the strongest engine:
+## no engine must not move, and more power must mean more speed.
+func _engine_test() -> int:
+	var f := 0
+	var speeds := {}
+	for eng in ["", "mower_engine", "i4_engine", "v10_engine"]:
+		var d: Dictionary = Designs.presets()[0].duplicate(true)
+		var blocks := []
+		for b in d.blocks:
+			if Blocks.defs[b.id].kind == "motor":
+				if eng != "":
+					var nb: Dictionary = b.duplicate(true)
+					nb.id = eng
+					blocks.append(nb)
+			else:
+				blocks.append(b)
+		d.blocks = blocks
+		main.builder.load_design(d, false)
+		main.start_test("testzone")
+		Controls.sim = {"always": 1.0}
+		await _frames(30)
+		Controls.sim = {"throttle": 1.0, "always": 1.0}
+		await _frames(240)
+		speeds[eng] = main.vehicle.linear_velocity.length()
+		Controls.sim = {"always": 1.0}
+		main.back_to_builder()
+		await _frames(2)
+	print("ENGINES 4s speed: none %.1f  mower %.1f  inline-4 %.1f  V10 %.1f" % [speeds[""], speeds["mower_engine"], speeds["i4_engine"], speeds["v10_engine"]])
+	f += _wcheck(speeds[""] < 1.0, "no engine: driven wheels stay still")
+	f += _wcheck(speeds["mower_engine"] > 1.0 and speeds["mower_engine"] < speeds["i4_engine"] - 3.0, "mower engine is weak")
+	f += _wcheck(speeds["v10_engine"] > speeds["i4_engine"] + 2.0, "racing V10 beats the inline-4")
 	return f
 
 

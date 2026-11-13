@@ -10,6 +10,9 @@ signal wrecked
 const FWD := Vector3(0, 0, -1)
 const WHEEL_VMAX := 46.0
 const WHEEL_VREV := 16.0
+## A driven wheel can pass this many times its `drive` rating when the engine
+## has the power for it. Engines decide how much of that capacity is used.
+const DRIVE_CAP := 1.6
 const Models := preload("res://scripts/block_models.gd")
 const NODE_NAMES := ["spin", "flame", "flap", "canopy", "beam", "particles", "lamp", "lamp2", "field", "led", "led2",
 	"yaw", "recoil", "bomb", "coil", "mov", "rod", "hglow", "barrels"]
@@ -33,6 +36,10 @@ var alive_count := 0
 var activity := 0.0
 var grounded := 0
 var dmg_mult := 1.0
+var engine_kw := 0.0          # total power of the living engines (kW)
+var engine_v0 := 5.0          # below this speed (m/s) the engines give full pulling force
+var drive_cap := 0.0          # sum of the engine-driven wheels' force capacity (N)
+var _drive_k := 0.0           # share of each wheel's capacity the engines can feed right now
 var mechs: Array[int] = []      # mover part indices, outermost first
 var _mech_dirty := 0.0
 var _mech_pose := false        # apply mechanism poses on the next update even without movement
@@ -306,6 +313,9 @@ func _recompute() -> void:
 	foot_count = 0
 	airbags = 0
 	alive_count = 0
+	engine_kw = 0.0
+	drive_cap = 0.0
+	var v0w := 0.0
 	for p in parts:
 		if not p.alive:
 			continue
@@ -313,13 +323,21 @@ func _recompute() -> void:
 		m += p.mass
 		c += p.pos * p.mass
 		match p.kind:
-			"wheel": wheel_count += 1
+			"wheel":
+				wheel_count += 1
+				if engine_driven(p):
+					drive_cap += p.def.drive * DRIVE_CAP * p.cfg.get("pow", 100) / 100.0
+			"motor":
+				var kw: float = p.def.kw * p.cfg.get("pow", 100) / 100.0
+				engine_kw += kw
+				v0w += kw * float(p.def.get("v0", 5.0))
 			"rotor": rotor_count += 1
 			"hover": hover_count += 1
 			"airbag": airbags += 1
 			"susp":
 				if not _has_wheel(p):
 					foot_count += 1
+	engine_v0 = v0w / engine_kw if engine_kw > 0.0 else 5.0
 	if m <= 0.0:
 		return
 	com_local = c / m
@@ -348,6 +366,11 @@ func _has_wheel(sp: Dictionary) -> bool:
 		if parts[j].alive and parts[j].kind == "wheel":
 			return true
 	return false
+
+
+## Wheels that need an engine: driven, with a drive rating, and no motor of their own.
+static func engine_driven(p: Dictionary) -> bool:
+	return p.cfg.get("drive", true) and p.def.drive > 0.0 and not p.def.has("kw")
 
 
 func com_world() -> Vector3:
@@ -398,6 +421,10 @@ func _physics_process(delta: float) -> void:
 	var flame_on := false
 	var shield := false
 	grounded = 0
+	# engine power spread over the driven wheels: full force at low speed, then power / speed
+	_drive_k = 0.0
+	if drive_cap > 0.0 and engine_kw > 0.0:
+		_drive_k = clampf(engine_kw * 1000.0 / maxf(speed, engine_v0) / drive_cap, 0.0, 1.0)
 	for i in parts.size():
 		var p: Dictionary = parts[i]
 		if not p.alive:
@@ -434,6 +461,10 @@ func _physics_process(delta: float) -> void:
 				act += absf(amt) * (2.0 if def.thrust > 10000.0 else 1.0)
 				if def.get("loud", false):
 					jet_act += absf(amt)
+			"motor":
+				if p.has("spin"):
+					p.spin.rotate_object_local(Vector3.BACK, (10.0 + absf(thr) * 60.0) * delta)
+				act += absf(thr) * 0.4
 			"rotor":
 				_rotor(p, wp, off, gb, lv, input, pw, delta, thr)
 				act += 0.7
@@ -776,7 +807,11 @@ func _wheel(p: Dictionary, wp: Vector3, gb: Basis, com_w: Vector3, space: Physic
 		if drives and ((wthr > 0.05 and vf < -0.8) or (wthr < -0.05 and vf > 0.8)) and mode != "tank":
 			lon = -signf(vf) * share * 12.0 * absf(wthr)
 		elif drives and absf(wthr) > 0.05:
-			var dp: float = def.drive * cfg.get("pow", 100) / 100.0
+			var dp: float = def.drive * DRIVE_CAP * cfg.get("pow", 100) / 100.0
+			if def.has("kw"):
+				dp = minf(dp, def.kw * 1000.0 * cfg.get("pow", 100) / 100.0 / maxf(speed, 8.0))
+			else:
+				dp *= _drive_k
 			var lim: float = def.get("vmax", WHEEL_VMAX) if wthr > 0.0 else WHEEL_VREV
 			var dirv := vf * signf(wthr)
 			lon = dp * wthr * clampf(1.0 - maxf(dirv, 0.0) / lim, 0.0, 1.0)
